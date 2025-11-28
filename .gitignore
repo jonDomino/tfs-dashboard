@@ -16,6 +16,7 @@ ENV/
 meatloaf.json
 streamlit_secrets.toml
 STREAMLIT_SECRETS.md
+PASTE_INTO_STREAMLIT_SECRETS.toml
 
 # Config files (uncomment if you want to exclude)
 # config.json
