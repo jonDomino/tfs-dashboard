@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Streamlit
+.streamlit/
+
+# Sensitive credentials - DO NOT COMMIT
+meatloaf.json
+streamlit_secrets.toml
+STREAMLIT_SECRETS.md
+
+# Config files (uncomment if you want to exclude)
+# config.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data files (if large)
+*.csv
+*.parquet
+/data/
+
+# Logs
+*.log
+
