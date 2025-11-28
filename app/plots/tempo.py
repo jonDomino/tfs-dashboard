@@ -387,7 +387,7 @@ def build_tempo_figure(
     
     # Add residual statistics table below if we have residual data
     if ax_residual is not None and residual_data:
-        # Prepare data for table with 5 columns: Metric, Count, Mean Res, Median Res, % Faster
+        # Prepare data for table with 5 columns: Metric, Count, Mean Res, Median Res, % Slower
         type_labels_display = {
             "oppo_made_shot": "Made Shot",
             "rebound": "Rebound",
@@ -424,7 +424,7 @@ def build_tempo_figure(
         # Create table with 5 columns
         table = ax_residual.table(
             cellText=table_data,
-            colLabels=["Metric", "Count", "Mean Res", "Median Res", "% Faster"],
+            colLabels=["Metric", "Count", "Mean Res", "Median Res", "% Slower"],
             cellLoc='center',
             loc='center',
             bbox=[0, 0, 1, 1]
@@ -472,7 +472,7 @@ def build_tempo_figure(
             except:
                 table[(row_idx, 3)].set_facecolor('#FFFFFF')  # White if can't parse
             
-            # Column 4: % Faster - >50%=red, <=50%=green
+            # Column 4: % Slower - >50%=red, <=50%=green
             try:
                 pct_str = row[4].replace('%', '')
                 pct_val = float(pct_str)
