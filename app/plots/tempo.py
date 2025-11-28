@@ -78,8 +78,74 @@ def build_tempo_figure(
     # Get style
     style = get_plot_style()
     
-    # Create figure
-    fig, ax = plt.subplots(figsize=style["figsize"])
+    # Calculate residuals early if we have closing_total (needed for subplot)
+    residual_data = None
+    if closing_total is not None and len(tfs_df) > 0:
+        try:
+            from app.data.bigquery_loader import calculate_expected_tfs
+            
+            # Calculate residuals for each possession
+            residuals = []
+            residuals_by_type = {"rebound": [], "turnover": [], "oppo_made_shot": [], "period_start": [], "other": []}
+            above_exp_count = 0
+            below_exp_count = 0
+            
+            for idx in range(len(tfs_df)):
+                actual_tfs = float(tfs_df.iloc[idx]["action_time"])
+                poss_type = None
+                if "poss_start_type" in tfs_df.columns:
+                    poss_type_val = tfs_df.iloc[idx]["poss_start_type"]
+                    if pd.notna(poss_type_val) and poss_type_val is not None:
+                        poss_type = str(poss_type_val).lower()
+                
+                expected_tfs = calculate_expected_tfs(float(closing_total), poss_type)
+                residual = actual_tfs - expected_tfs
+                residuals.append(residual)
+                
+                # Track by type
+                if poss_type in residuals_by_type:
+                    residuals_by_type[poss_type].append(residual)
+                else:
+                    residuals_by_type["other"].append(residual)
+                
+                # Count above/below
+                if residual > 0:
+                    above_exp_count += 1
+                else:
+                    below_exp_count += 1
+            
+            # Calculate statistics
+            avg_residual = np.mean(residuals) if residuals else 0.0
+            total_poss = len(residuals)
+            pct_above = (above_exp_count / total_poss * 100) if total_poss > 0 else 0.0
+            
+            # Calculate average residual by type
+            avg_by_type = {}
+            for poss_type, res_list in residuals_by_type.items():
+                if res_list:
+                    avg_by_type[poss_type] = np.mean(res_list)
+            
+            residual_data = {
+                "avg_residual": avg_residual,
+                "avg_by_type": avg_by_type,
+                "pct_above": pct_above,
+                "total_poss": total_poss
+            }
+        except Exception as e:
+            # If calculation fails, skip residual chart
+            import traceback
+            print(f"Error calculating residual statistics: {e}")
+            print(traceback.format_exc())
+    
+    # Create figure with subplots if we have residual data, otherwise single plot
+    if residual_data:
+        fig, axes = plt.subplots(2, 1, figsize=(style["figsize"][0], style["figsize"][1] * 1.3), 
+                                 height_ratios=[3, 1], sharex=False)
+        ax = axes[0]
+        ax_residual = axes[1]
+    else:
+        fig, ax = plt.subplots(figsize=style["figsize"])
+        ax_residual = None
     
     # Plot raw data with color-coding by poss_start_type
     if "poss_start_type" in tfs_df.columns:
@@ -263,82 +329,32 @@ def build_tempo_figure(
             fontweight='bold'
         )
     
-    # Calculate residuals and statistics if we have expected TFS
+    # Build residual statistics text for display (if needed)
     residual_stats_text = None
-    if exp_gx is not None and exp_gy is not None and len(tfs_df) > 0:
-        try:
-            from app.data.bigquery_loader import calculate_expected_tfs
-            
-            # Calculate residuals for each possession
-            residuals = []
-            residuals_by_type = {"rebound": [], "turnover": [], "oppo_made_shot": [], "period_start": [], "other": []}
-            above_exp_count = 0
-            below_exp_count = 0
-            
-            for idx in range(len(tfs_df)):
-                actual_tfs = float(tfs_df.iloc[idx]["action_time"])
-                poss_type = None
-                if "poss_start_type" in tfs_df.columns:
-                    poss_type_val = tfs_df.iloc[idx]["poss_start_type"]
-                    if pd.notna(poss_type_val) and poss_type_val is not None:
-                        poss_type = str(poss_type_val).lower()
-                
-                expected_tfs = calculate_expected_tfs(float(closing_total), poss_type)
-                residual = actual_tfs - expected_tfs
-                residuals.append(residual)
-                
-                # Track by type
-                if poss_type in residuals_by_type:
-                    residuals_by_type[poss_type].append(residual)
-                else:
-                    residuals_by_type["other"].append(residual)
-                
-                # Count above/below
-                if residual > 0:
-                    above_exp_count += 1
-                else:
-                    below_exp_count += 1
-            
-            # Calculate statistics
-            avg_residual = np.mean(residuals) if residuals else 0.0
-            total_poss = len(residuals)
-            pct_above = (above_exp_count / total_poss * 100) if total_poss > 0 else 0.0
-            pct_below = (below_exp_count / total_poss * 100) if total_poss > 0 else 0.0
-            
-            # Calculate average residual by type
-            avg_by_type = {}
-            type_labels = {
-                "rebound": "Reb",
-                "turnover": "TO",
-                "oppo_made_shot": "Made",
-                "period_start": "Start",
-                "other": "Other"
-            }
-            
-            for poss_type, res_list in residuals_by_type.items():
-                if res_list:
-                    avg_by_type[poss_type] = np.mean(res_list)
-            
-            # Build statistics text
-            stats_parts = [f"Avg Residual: {avg_residual:+.1f}s"]
-            
-            # Add by-type residuals
-            type_parts = []
-            for poss_type in ["rebound", "turnover", "oppo_made_shot", "period_start"]:
-                if poss_type in avg_by_type:
-                    type_parts.append(f"{type_labels[poss_type]}: {avg_by_type[poss_type]:+.1f}s")
-            if type_parts:
-                stats_parts.append(" | ".join(type_parts))
-            
-            # Add percentages
-            stats_parts.append(f"Above: {pct_above:.1f}% | Below: {pct_below:.1f}%")
-            
-            residual_stats_text = " | ".join(stats_parts)
-        except Exception as e:
-            # If calculation fails, just skip the stats
-            import traceback
-            print(f"Error calculating residual statistics: {e}")
-            print(traceback.format_exc())
+    if residual_data:
+        type_labels = {
+            "rebound": "Reb",
+            "turnover": "TO",
+            "oppo_made_shot": "Made",
+            "period_start": "Start",
+            "other": "Other"
+        }
+        
+        stats_parts = [f"Avg Residual: {residual_data['avg_residual']:+.1f}s"]
+        
+        # Add by-type residuals
+        type_parts = []
+        for poss_type in ["rebound", "turnover", "oppo_made_shot", "period_start"]:
+            if poss_type in residual_data['avg_by_type']:
+                type_parts.append(f"{type_labels[poss_type]}: {residual_data['avg_by_type'][poss_type]:+.1f}s")
+        if type_parts:
+            stats_parts.append(" | ".join(type_parts))
+        
+        # Add percentages
+        pct_below = 100 - residual_data['pct_above']
+        stats_parts.append(f"Above: {residual_data['pct_above']:.1f}% | Below: {pct_below:.1f}%")
+        
+        residual_stats_text = " | ".join(stats_parts)
     
     # Styling
     ax.set_title(f"{header}\nAverage Tempo (TFS)", fontsize=style["fontsize_title"])
@@ -348,8 +364,64 @@ def build_tempo_figure(
     # Create main legend (for lines, change points, etc.)
     ax.legend(loc="upper right", fontsize=style["fontsize_legend"])
     
-    # Add residual statistics at the bottom
-    if residual_stats_text:
+    # Add residual statistics chart below if we have residual data
+    if ax_residual is not None and residual_data:
+        # Prepare data for bar chart
+        type_labels_display = {
+            "rebound": "Rebound",
+            "turnover": "Turnover",
+            "oppo_made_shot": "Made Shot",
+            "period_start": "Period Start",
+            "other": "Other"
+        }
+        
+        # Create bar chart data
+        categories = ["Overall"]
+        values = [residual_data['avg_residual']]
+        colors_list = [get_color("primary")]
+        
+        # Add possession type bars
+        for poss_type in ["rebound", "turnover", "oppo_made_shot"]:
+            if poss_type in residual_data['avg_by_type']:
+                categories.append(type_labels_display[poss_type])
+                values.append(residual_data['avg_by_type'][poss_type])
+                # Color based on sign: green for negative (faster), red for positive (slower)
+                if residual_data['avg_by_type'][poss_type] < 0:
+                    colors_list.append(get_color("success"))
+                else:
+                    colors_list.append(get_color("danger"))
+        
+        # Create bar positions
+        x_pos = np.arange(len(categories))
+        
+        # Plot bars
+        bars = ax_residual.bar(x_pos, values, color=colors_list, alpha=0.7, edgecolor='black', linewidth=0.5)
+        
+        # Add value labels on bars
+        for i, (bar, val) in enumerate(zip(bars, values)):
+            height = bar.get_height()
+            ax_residual.text(bar.get_x() + bar.get_width()/2., height,
+                            f'{val:+.1f}s',
+                            ha='center', va='bottom' if height >= 0 else 'top',
+                            fontsize=8, fontweight='bold')
+        
+        # Add zero line
+        ax_residual.axhline(y=0, color='black', linestyle='-', linewidth=0.8)
+        
+        # Set labels and title
+        ax_residual.set_xticks(x_pos)
+        ax_residual.set_xticklabels(categories, rotation=45, ha='right', fontsize=9)
+        ax_residual.set_ylabel('Avg Residual (s)', fontsize=9)
+        ax_residual.set_title(f'Residual Statistics | {residual_data["pct_above"]:.1f}% Above Expected', 
+                             fontsize=10, fontweight='bold')
+        ax_residual.grid(axis='y', alpha=0.3, linestyle='--')
+        ax_residual.set_xlabel("")  # No x-axis label for residual chart
+        
+        # Set x-axis label on main plot
+        ax.set_xlabel("Possession", fontsize=10)
+    
+    # Add residual statistics text at the bottom of main plot (if no subplot)
+    elif residual_stats_text:
         ax.text(
             0.5, -0.12, residual_stats_text,
             transform=ax.transAxes,
@@ -359,6 +431,9 @@ def build_tempo_figure(
             bbox=dict(boxstyle='round', facecolor='lightgray', alpha=0.7),
             family='monospace'
         )
+        ax.set_xlabel("Possession")
+    else:
+        ax.set_xlabel("Possession")
     
     fig.tight_layout()
     return fig
