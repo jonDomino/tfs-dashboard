@@ -127,20 +127,30 @@ def build_tempo_figure(
             total_poss = len(residuals)
             pct_above = (above_exp_count / total_poss * 100) if total_poss > 0 else 0.0
             
-            # Calculate average residual and % above by type
+            # Calculate average residual, median residual, and % above by type
             avg_by_type = {}
+            median_by_type = {}
             pct_above_by_type = {}
+            count_by_type = {}
             for poss_type, res_list in residuals_by_type.items():
                 if res_list:
                     avg_by_type[poss_type] = np.mean(res_list)
+                    median_by_type[poss_type] = np.median(res_list)
                     pct_above_by_type[poss_type] = (above_exp_count_by_type[poss_type] / total_count_by_type[poss_type] * 100) if total_count_by_type[poss_type] > 0 else 0.0
+                    count_by_type[poss_type] = total_count_by_type[poss_type]
+            
+            # Calculate overall median
+            median_residual = np.median(residuals) if residuals else 0.0
             
             residual_data = {
                 "avg_residual": avg_residual,
+                "median_residual": median_residual,
                 "avg_by_type": avg_by_type,
+                "median_by_type": median_by_type,
                 "pct_above": pct_above,
                 "pct_above_by_type": pct_above_by_type,
-                "total_poss": total_poss
+                "total_poss": total_poss,
+                "count_by_type": count_by_type
             }
         except Exception as e:
             # If calculation fails, skip residual chart
@@ -377,7 +387,7 @@ def build_tempo_figure(
     
     # Add residual statistics table below if we have residual data
     if ax_residual is not None and residual_data:
-        # Prepare data for table with 3 columns: Metric, Residuals, % Above
+        # Prepare data for table with 5 columns: Metric, Count, Mean Res, Median Res, % Above
         type_labels_display = {
             "oppo_made_shot": "Made Shot",
             "rebound": "Rebound",
@@ -390,25 +400,31 @@ def build_tempo_figure(
         # Overall row
         table_data.append([
             "Overall",
+            str(residual_data['total_poss']),
             f"{residual_data['avg_residual']:+.1f}s",
+            f"{residual_data['median_residual']:+.1f}s",
             f"{residual_data['pct_above']:.1f}%"
         ])
         
         # Add possession type rows (Made Shot, Rebound, Turnover)
         for poss_type in ["oppo_made_shot", "rebound", "turnover"]:
             if poss_type in residual_data['avg_by_type']:
+                count = residual_data['count_by_type'].get(poss_type, 0)
                 avg_res = residual_data['avg_by_type'][poss_type]
+                median_res = residual_data['median_by_type'].get(poss_type, 0.0)
                 pct_above = residual_data['pct_above_by_type'].get(poss_type, 0.0)
                 table_data.append([
                     type_labels_display[poss_type],
+                    str(count),
                     f"{avg_res:+.1f}s",
+                    f"{median_res:+.1f}s",
                     f"{pct_above:.1f}%"
                 ])
         
-        # Create table with 3 columns
+        # Create table with 5 columns
         table = ax_residual.table(
             cellText=table_data,
-            colLabels=["Metric", "Residuals", "% Above"],
+            colLabels=["Metric", "Count", "Mean Res", "Median Res", "% Above"],
             cellLoc='center',
             loc='center',
             bbox=[0, 0, 1, 1]
@@ -416,11 +432,11 @@ def build_tempo_figure(
         
         # Style the table
         table.auto_set_font_size(False)
-        table.set_fontsize(9)
+        table.set_fontsize(8)
         table.scale(1, 2)
         
         # Style header row (row 0 in matplotlib table)
-        for j in range(3):
+        for j in range(5):
             table[(0, j)].set_facecolor('#4472C4')
             table[(0, j)].set_text_props(weight='bold', color='white')
         
@@ -428,22 +444,44 @@ def build_tempo_figure(
         for i, row in enumerate(table_data):
             row_idx = i + 1  # Data rows start at index 1 (after header)
             
-            # Color metric column (light gray)
+            # Column 0: Metric column (light gray)
             table[(row_idx, 0)].set_facecolor('#F0F0F0')
             
-            # Color residual column based on value (green=faster, pink=slower)
+            # Column 1: Count column (white/neutral)
+            table[(row_idx, 1)].set_facecolor('#FFFFFF')
+            
+            # Column 2: Mean Res - positive=red, negative=green
             try:
-                val_str = row[1].replace('s', '')
+                val_str = row[2].replace('s', '')
                 val = float(val_str)
                 if val < 0:
-                    table[(row_idx, 1)].set_facecolor('#90EE90')  # Light green for faster
+                    table[(row_idx, 2)].set_facecolor('#90EE90')  # Light green for negative (faster)
                 else:
-                    table[(row_idx, 1)].set_facecolor('#FFB6C1')  # Light pink for slower
+                    table[(row_idx, 2)].set_facecolor('#FFB6C1')  # Light pink/red for positive (slower)
             except:
-                table[(row_idx, 1)].set_facecolor('#FFFFFF')  # White if can't parse
+                table[(row_idx, 2)].set_facecolor('#FFFFFF')  # White if can't parse
             
-            # Color % Above column (light blue)
-            table[(row_idx, 2)].set_facecolor('#E6E6FA')  # Lavender
+            # Column 3: Median Res - positive=red, negative=green
+            try:
+                val_str = row[3].replace('s', '')
+                val = float(val_str)
+                if val < 0:
+                    table[(row_idx, 3)].set_facecolor('#90EE90')  # Light green for negative (faster)
+                else:
+                    table[(row_idx, 3)].set_facecolor('#FFB6C1')  # Light pink/red for positive (slower)
+            except:
+                table[(row_idx, 3)].set_facecolor('#FFFFFF')  # White if can't parse
+            
+            # Column 4: % Above - <50%=red, >=50%=green
+            try:
+                pct_str = row[4].replace('%', '')
+                pct_val = float(pct_str)
+                if pct_val < 50:
+                    table[(row_idx, 4)].set_facecolor('#FFB6C1')  # Light pink/red for <50%
+                else:
+                    table[(row_idx, 4)].set_facecolor('#90EE90')  # Light green for >=50%
+            except:
+                table[(row_idx, 4)].set_facecolor('#FFFFFF')  # White if can't parse
         
         # Remove axes for table
         ax_residual.axis('off')
