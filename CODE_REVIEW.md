@@ -44,10 +44,11 @@ This is a comprehensive code review of the TFS (Time to First Shot) Kernel Dashb
    - Red shading: Actual tempo slower than possession-level expected
    - Green shading: Actual tempo faster than possession-level expected
    - Residual statistics table (subplot below main plot):
-     - Overall average residual
-     - Average residual by possession type (Rebound, Turnover, Made Shot)
-     - Percentage of possessions above expected
-     - Color-coded cells (green=faster than expected, pink=slower than expected)
+     - Columns: Metric, Count, Mean Res, Median Res, % Above
+     - Rows: Overall, Made Shot, Rebound, Turnover
+     - Color-coded cells:
+       - Mean Res & Median Res: Positive (red) = slower than expected, Negative (green) = faster than expected
+       - % Above: <50% (red), >=50% (green)
 
 6. **Data Sources**
    - ESPN API for schedule and play-by-play data
@@ -118,7 +119,7 @@ dashboard/
 │   │   ├── kernel.py
 │   │   ├── style.py
 │   │   └── time.py
-│   └── main.py        # Main application (502 lines)
+│   └── main.py        # Main application (500 lines)
 ├── builders/          # Action time processing pipeline
 │   └── action_time/
 └── streamlit_app.py   # Entry point
@@ -188,7 +189,7 @@ dashboard/
    - Should use vectorized operations or `.iterrows()` / `.itertuples()`
 
 9. **Function Complexity**
-   - `build_tempo_figure()`: 440 lines, does too much (includes residual chart subplot)
+   - `build_tempo_figure()`: 505 lines, does too much (includes residual chart subplot with enhanced 5-column table)
    - `_render_content()`: 148 lines, complex nested logic
    - `get_game_statuses()`: 84 lines, handles multiple concerns
 
@@ -201,9 +202,10 @@ dashboard/
     - No centralized config file
     - Settings scattered across codebase
 
-12. **Duplicate Files**
-    - `get_sched.py` and `get_pbp.py` exist in both root and `app/data/`
-    - Should consolidate
+12. **Residual Statistics Table Complexity**
+   - Residual calculation logic embedded in `build_tempo_figure()` (~70 lines)
+   - Table building and styling logic embedded in plot function (~65 lines)
+   - Should be extracted to separate service/module for better testability
 
 ---
 
@@ -437,8 +439,8 @@ logger.error(f"Error: {e}")
 ### Code Quality Metrics
 - **Cyclomatic Complexity**: Reduce average function complexity from ~15 to <10
 - **Lines per File**: 
-  - Reduce `main.py` from 502 to <200 lines
-  - Reduce `app/plots/tempo.py` from 440 to <250 lines (split into smaller functions)
+  - Reduce `main.py` from 500 to <200 lines
+  - Reduce `app/plots/tempo.py` from 505 to <250 lines (split into smaller functions)
 - **Code Duplication**: Reduce from ~15% to <5%
 - **Test Coverage**: Increase from 0% to >60%
 
@@ -473,56 +475,21 @@ The refactoring can be done incrementally without disrupting current functionali
 
 ---
 
-## 9. Obsolete Files
+## 9. Recent Improvements
 
-The following files are **obsolete** and should be removed from the repository:
-
-### Root-Level Duplicate Files
-1. **`get_sched.py`** (root directory)
-   - **Status**: Obsolete
-   - **Reason**: Duplicate of `app/data/get_sched.py`
-   - **Action**: Delete root-level file
-   - **Note**: All imports use `app/data/get_sched.py` via `schedule_loader.py`
-
-2. **`get_pbp.py`** (root directory)
-   - **Status**: Obsolete
-   - **Reason**: Duplicate of `app/data/get_pbp.py`
-   - **Action**: Delete root-level file
-   - **Note**: All imports use `app/data/get_pbp.py` via `pbp_loader.py`
-
-### Potentially Obsolete Documentation Files
-3. **`DEPENDENCIES_ADDED.md`**
-   - **Status**: Potentially obsolete
-   - **Reason**: Historical documentation, may no longer be relevant
-   - **Action**: Review and either update or remove
-
-4. **`PASTE_INTO_STREAMLIT_SECRETS.toml`**
-   - **Status**: Potentially obsolete
-   - **Reason**: Template file, may be redundant with `STREAMLIT_SECRETS.md`
-   - **Action**: Review and consolidate with `STREAMLIT_SECRETS.md` or remove
-
-### Files That Should Be Ignored (Already in .gitignore)
-- `meatloaf.json` - Credentials file (correctly excluded)
-- `streamlit_secrets.toml` - Local secrets (correctly excluded)
-- `STREAMLIT_SECRETS.md` - ✅ **RESOLVED**: Removed from git history via orphan branch approach
-
-### Recommended Cleanup Actions
-
-```bash
-# Remove obsolete root-level files
-git rm get_sched.py get_pbp.py
-
-# Review and potentially remove
-# DEPENDENCIES_ADDED.md
-# PASTE_INTO_STREAMLIT_SECRETS.toml
-```
+### Completed Cleanup (2025)
+- ✅ Removed duplicate root-level files (`get_sched.py`, `get_pbp.py`)
+- ✅ Removed obsolete documentation files (`DEPENDENCIES_ADDED.md`, `PASTE_INTO_STREAMLIT_SECRETS.toml`)
+- ✅ Removed credentials from git history
+- ✅ Enhanced residuals table with Count and Median Res columns
+- ✅ Improved color shading logic for residuals table
 
 ### Current Import Structure (Correct)
 - ✅ `app/data/schedule_loader.py` → `from .get_sched import get_sched`
 - ✅ `app/data/pbp_loader.py` → `from .get_pbp import get_pbp`
 - ✅ `app/main.py` → `from app.data.get_pbp import get_pbp` (for parallel processing)
 
-**All imports correctly reference `app/data/` versions, making root-level files unused.**
+**All imports correctly reference `app/data/` versions.**
 
 ---
 

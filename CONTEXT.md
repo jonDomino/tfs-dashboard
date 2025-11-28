@@ -10,32 +10,32 @@ This is a **Streamlit dashboard** for real-time monitoring of **Time to First Sh
 1. ✅ **Possession-level Expected TFS**: Implemented dynamic expected TFS calculation based on `poss_start_type` (rebound, turnover, oppo_made_shot) with different formulas for each type
 2. ✅ **Dual Expected TFS Lines**: Shows both game-level (flat dashed line) and possession-level (smooth trend line) expected TFS
 3. ✅ **Shading Logic**: Red/green shading compares actual kernel curve vs possession-level expected kernel (not game-level)
-4. ✅ **Residual Statistics Table**: Added dedicated data table below main tempo plot showing:
-   - Overall average residual
-   - Average residual by possession type (Rebound, Turnover, Made Shot)
-   - Percentage of possessions above expected
-   - Color-coded cells (green=faster than expected, pink=slower than expected)
-5. ✅ **Git History Cleanup**: Removed credentials from git history using orphan branch approach
-6. ✅ **Timezone Fix**: Converted all game dates to PST at pipeline entry to fix filtering issues
-7. ✅ **Possession Start Legend**: Moved from individual plots to sidebar as single legend
-8. ✅ **Code Review**: Created comprehensive `CODE_REVIEW.md` documenting requirements and refactoring recommendations
+4. ✅ **Enhanced Residual Statistics Table**: Comprehensive data table below main tempo plot with:
+   - Columns: Metric, Count, Mean Res, Median Res, % Above
+   - Rows: Overall, Made Shot, Rebound, Turnover
+   - Color-coded cells:
+     - Mean Res & Median Res: Positive (red) = slower than expected, Negative (green) = faster
+     - % Above: <50% (red), >=50% (green)
+5. ✅ **File Cleanup**: Removed duplicate files, obsolete documentation, and git debugging files
+6. ✅ **Git History Cleanup**: Removed credentials from git history using orphan branch approach
+7. ✅ **Timezone Fix**: Converted all game dates to PST at pipeline entry to fix filtering issues
+8. ✅ **Possession Start Legend**: Moved from individual plots to sidebar as single legend
+9. ✅ **Code Review**: Created comprehensive `CODE_REVIEW.md` documenting requirements and refactoring recommendations
 
 ### Current Status
 
-**✅ Git Push Issue RESOLVED**: Successfully removed credentials from git history by creating a clean orphan branch and force pushing. Repository now has clean history without any credentials.
-
 **Status:**
-- ✅ Fixed: Removed `STREAMLIT_SECRETS.md` from git tracking
-- ✅ Fixed: Created clean git history (orphan branch approach)
-- ✅ Fixed: Force pushed clean history to remote
-- ✅ Fixed: GitHub push protection now passes
+- ✅ Repository has clean history (credentials removed)
+- ✅ All obsolete files cleaned up (duplicates, git debugging files removed)
+- ✅ Enhanced residuals table with Count, Mean Res, Median Res columns
+- ✅ Streamlit Cloud deployment working correctly
 - ✅ Credentials stored in Streamlit Cloud settings (not in repo)
 
 ## Key Files & Their Purpose
 
 ### Core Application
 - `streamlit_app.py` - Entry point (thin wrapper)
-- `app/main.py` - Main application logic (502 lines - needs refactoring)
+- `app/main.py` - Main application logic (500 lines - needs refactoring)
 - `app/data/` - Data loading modules
   - `schedule_loader.py` - Loads schedule from ESPN
   - `pbp_loader.py` - Loads play-by-play data (cached)
@@ -52,15 +52,16 @@ This is a **Streamlit dashboard** for real-time monitoring of **Time to First Sh
 - `builders/action_time/` - Action time processing pipeline
 
 ### Visualization
-- `app/plots/tempo.py` - Main tempo plot (440 lines - needs refactoring)
+- `app/plots/tempo.py` - Main tempo plot (505 lines - needs refactoring)
   - Shows kernel-smoothed tempo curve
   - Game-level expected TFS (dashed line)
   - Possession-level expected TFS (trend line)
   - Red/green shading (actual vs possession-level expected)
-  - Residual statistics table (subplot below main plot)
-    - Overall average residual
-    - Average residual by possession type (Rebound, Turnover, Made Shot)
-    - Percentage above expected
+  - Enhanced residual statistics table (subplot below main plot):
+    - Columns: Metric, Count, Mean Res, Median Res, % Above
+    - Rows: Overall, Made Shot, Rebound, Turnover
+    - Color-coded: Positive residuals (red), Negative residuals (green)
+    - % Above: <50% (red), >=50% (green)
 
 ### UI Components
 - `app/ui/selectors.py` - Date, game, board selectors
@@ -103,8 +104,8 @@ This is a **Streamlit dashboard** for real-time monitoring of **Time to First Sh
 
 ## Technical Debt & Known Issues
 
-1. **`app/main.py` too large** (502 lines) - needs splitting
-2. **`app/plots/tempo.py` too complex** (366 lines) - needs refactoring
+1. **`app/main.py` too large** (500 lines) - needs splitting
+2. **`app/plots/tempo.py` too complex** (505 lines) - needs refactoring (includes enhanced residuals table logic)
 3. **Duplicate code** - Expected TFS calculation repeated
 4. **Magic numbers** - Cache TTLs, time restrictions hardcoded
 5. **Timezone** - Uses fixed UTC-8 offset (doesn't handle DST)
@@ -115,12 +116,14 @@ See `CODE_REVIEW.md` for detailed refactoring recommendations.
 ## Recent Git History
 
 ```
-aae6160 - Add residual statistics chart below tempo plots showing avg residual overall and by possession type, plus % above expected
-f1a42d3 - Remove temporary cleanup script
-eba5796 - Initial commit: TFS Kernel Dashboard (credentials removed from history)
+820a7c3 - Enhance residuals table: add Count and Median Res columns, rename Residuals to Mean Res, update color shading
+d0a6e90 - Remove test deployment text from plots
+5bd5183 - Remove obsolete files: duplicates, credentials, git debugging files
+29fda5e - Update residual statistics table: 3 columns (Metric, Residual, % Above)
+f68d509 - Replace residual statistics bar chart with numerical data table
 ```
 
-**Note**: Previous history was cleaned to remove credentials. Current branch starts from clean commit.
+**Note**: Repository has clean history. Previous credentials have been removed.
 
 ## Next Steps (Priority Order)
 
