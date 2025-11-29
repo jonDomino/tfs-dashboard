@@ -38,7 +38,8 @@ def build_tempo_figure(
     expected_tfs: Optional[float] = None,
     closing_total: Optional[float] = None,
     efg_first_half: Optional[float] = None,
-    efg_second_half: Optional[float] = None
+    efg_second_half: Optional[float] = None,
+    rotation_number: Optional[int] = None
 ) -> plt.Figure:
     """Build tempo visualization figure.
     
@@ -51,6 +52,7 @@ def build_tempo_figure(
         closing_total: Closing total for calculating possession-level expected TFS
         efg_first_half: First half eFG%
         efg_second_half: Second half eFG%
+        rotation_number: Away team rotation number (optional)
         
     Returns:
         Matplotlib figure
@@ -504,6 +506,19 @@ def build_tempo_figure(
         ax.set_xlabel("Possession")
     else:
         ax.set_xlabel("Possession")
+    
+    # Add rotation number text in top-left margin (outside plot area)
+    if rotation_number is not None:
+        fig.text(
+            0.02, 0.98,  # Top-left corner in figure coordinates
+            f"Roto: {rotation_number}",
+            fontsize=9,
+            color='gray',
+            alpha=0.5,  # Faint
+            horizontalalignment='left',
+            verticalalignment='top',
+            transform=fig.transFigure  # Use figure coordinates
+        )
     
     fig.tight_layout()
     return fig

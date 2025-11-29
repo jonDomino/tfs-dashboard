@@ -29,7 +29,7 @@ def should_run_query() -> bool:
 
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour (closing totals don't change often)
-def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str]]:
+def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str, Optional[int]]]:
     """Internal function to fetch closing totals from BigQuery.
     
     This is cached for 1 hour. The wrapper function handles time restrictions.
@@ -38,7 +38,7 @@ def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str]]
         game_ids: List of game ID strings
         
     Returns:
-        Dictionary mapping game_id to (closing_total, board)
+        Dictionary mapping game_id to (closing_total, board, rotation_number)
     """
     
     # Load credentials - try multiple methods
@@ -143,14 +143,15 @@ def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str]]
         query_job = client.query(query)
         results = query_job.result()
         
-        # Build dictionary with (closing_total, board) tuples
+        # Build dictionary with (closing_total, board, rotation_number) tuples
         closing_totals = {}
         for row in results:
             if row.game_id and row.closing_total is not None:
                 # Ensure closing_total is a float
                 closing_total = float(row.closing_total)
                 board = str(row.board) if row.board else 'main'
-                closing_totals[str(row.game_id)] = (closing_total, board)
+                rotation_number = int(row.away_rotationNumber) if row.away_rotationNumber is not None else None
+                closing_totals[str(row.game_id)] = (closing_total, board, rotation_number)
         
         return closing_totals
         
@@ -159,8 +160,8 @@ def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str]]
         return {}
 
 
-def get_closing_totals(game_ids: list) -> Dict[str, Tuple[float, str]]:
-    """Get closing totals and board info for a list of game IDs from BigQuery.
+def get_closing_totals(game_ids: list) -> Dict[str, Tuple[float, str, Optional[int]]]:
+    """Get closing totals, board info, and rotation numbers for a list of game IDs from BigQuery.
     
     Only runs query once per hour (via cache) and skips between 10pm-8am.
     During off-hours, returns cached data if available, otherwise empty dict.
@@ -169,7 +170,7 @@ def get_closing_totals(game_ids: list) -> Dict[str, Tuple[float, str]]:
         game_ids: List of game ID strings
         
     Returns:
-        Dictionary mapping game_id to (closing_total, board)
+        Dictionary mapping game_id to (closing_total, board, rotation_number)
     """
     # Check if we should run the query based on time
     if not should_run_query():

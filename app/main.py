@@ -1,7 +1,7 @@
 """Main Streamlit application entry point"""
 import streamlit as st
 from datetime import datetime, date, timedelta
-from typing import List, Dict, Set, Tuple
+from typing import List, Dict, Set, Tuple, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from app.data.schedule_loader import load_schedule
 from app.data.pbp_loader import load_pbp
@@ -283,12 +283,13 @@ def get_game_data(game_id: str):
         return None, None, None, None, None
 
 
-def render_game(game_id: str, closing_totals: Dict[str, float] = None):
+def render_game(game_id: str, closing_totals: Dict[str, float] = None, rotation_number: Optional[int] = None):
     """Render a single game's visualization.
     
     Args:
         game_id: Game identifier
         closing_totals: Dictionary mapping game_id to closing_total
+        rotation_number: Away team rotation number (optional)
     """
     st.markdown(f"**Game {game_id}**")
     
@@ -324,7 +325,8 @@ def render_game(game_id: str, closing_totals: Dict[str, float] = None):
         game_status=status,
         closing_total=closing_total,
         efg_first_half=efg_1h,
-        efg_second_half=efg_2h
+        efg_second_half=efg_2h,
+        rotation_number=rotation_number
     )
     render_chart(fig)
 
@@ -426,17 +428,20 @@ def _render_content():
             # Fail gracefully if BigQuery fails
             pass
     
-    # Filter by board and build closing_totals dict (just closing_total values)
+    # Filter by board and build closing_totals dict (just closing_total values) and rotation_numbers dict
     closing_totals = {}
+    rotation_numbers = {}
     if closing_totals_raw:
         for gid in game_ids:
             if gid in closing_totals_raw:
-                closing_total, board = closing_totals_raw[gid]
+                closing_total, board, rotation_number = closing_totals_raw[gid]
                 # Ensure closing_total is a float
                 closing_total = float(closing_total)
                 # Only include if board matches filter
                 if board in selected_boards:
                     closing_totals[gid] = closing_total
+                    if rotation_number is not None:
+                        rotation_numbers[gid] = rotation_number
     
     # Group games by status
     games_by_status: Dict[str, List[str]] = {
@@ -467,8 +472,15 @@ def _render_content():
     for status in status_order:
         games = games_by_status[status]
         if games:  # Only create tab if there are games
+            # Sort games by rotation number descending (higher rotation numbers first)
+            # Games without rotation numbers go to the end
+            games_sorted = sorted(
+                games,
+                key=lambda gid: (rotation_numbers.get(gid) is None, rotation_numbers.get(gid) or 0),
+                reverse=True
+            )
             tab_names.append(f"{status} ({len(games)})")
-            tab_games.append((status, games))
+            tab_games.append((status, games_sorted))
     
     if not tab_games:
         render_info("No games available for the selected date and board filter.")
@@ -505,7 +517,8 @@ def _render_content():
                         # Render directly into the container (atomic update - no gray out)
                         try:
                             with st.session_state.plot_containers[container_key]:
-                                render_game(gid, closing_totals=closing_totals)
+                                rotation_number = rotation_numbers.get(gid)
+                                render_game(gid, closing_totals=closing_totals, rotation_number=rotation_number)
                         except Exception as e:
                             # Log error but don't crash the whole dashboard
                             if 'error_log' not in st.session_state:
