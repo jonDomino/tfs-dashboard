@@ -2,9 +2,10 @@
 import pandas as pd
 import streamlit as st
 from .get_pbp import get_pbp
+from app.config import config
 
 
-@st.cache_data(ttl=60)  # Cache for 60 seconds
+@st.cache_data(ttl=config.CACHE_TTL_PBP)  # Cache for configured duration
 def load_pbp_cached(game_id: str) -> pd.DataFrame:
     """Load play-by-play data with caching.
     

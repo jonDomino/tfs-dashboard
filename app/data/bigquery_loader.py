@@ -6,13 +6,14 @@ import streamlit as st
 from datetime import datetime, time
 from google.cloud import bigquery
 from typing import Dict, Optional, Tuple
+from app.config import config
 
 
 def should_run_query() -> bool:
     """Determine if we should run the BigQuery query.
     
     Rules:
-    - Don't run between 10pm (22:00) and 8am (08:00)
+    - Don't run between configured end hour and start hour
     - Otherwise, allow query (caching will handle once-per-hour)
     
     Returns:
@@ -21,14 +22,14 @@ def should_run_query() -> bool:
     now = datetime.now()
     current_time = now.time()
     
-    # Don't run between 10pm and 8am
-    if time(22, 0) <= current_time or current_time < time(8, 0):
+    # Don't run between end hour and start hour
+    if time(config.BQ_QUERY_END_HOUR, 0) <= current_time or current_time < time(config.BQ_QUERY_START_HOUR, 0):
         return False
     
     return True
 
 
-@st.cache_data(ttl=3600)  # Cache for 1 hour (closing totals don't change often)
+@st.cache_data(ttl=config.CACHE_TTL_CLOSING_TOTALS)  # Cache for configured duration (closing totals don't change often)
 def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str, Optional[int]]]:
     """Internal function to fetch closing totals from BigQuery.
     

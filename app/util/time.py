@@ -2,9 +2,10 @@
 import streamlit as st
 from datetime import datetime
 import time
+from app.config import config
 
 
-def setup_refresh_timer(interval_seconds: int = 30):
+def setup_refresh_timer(interval_seconds: int = config.REFRESH_INTERVAL):
     """Setup flicker-free refresh timer.
     
     This should be called at the end of the main render function.
@@ -27,7 +28,7 @@ def setup_refresh_timer(interval_seconds: int = 30):
     st.sidebar.caption(f"Last refresh: {st.session_state.last_refresh_time.strftime('%H:%M:%S')}")
     
     # Optional: Add auto-refresh toggle
-    auto_refresh = st.sidebar.checkbox("Auto-refresh (30s)", value=True)
+    auto_refresh = st.sidebar.checkbox(f"Auto-refresh ({config.REFRESH_INTERVAL}s)", value=True)
     if auto_refresh:
         # Use JavaScript-based refresh to avoid st.rerun() loops that crash the browser
         # This is safer than calling st.rerun() during render

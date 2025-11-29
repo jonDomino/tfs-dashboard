@@ -15,6 +15,7 @@ from app.ui.renderer import render_chart, render_error, render_warning, render_i
 from app.ui.layout import render_game_grid, create_game_grid
 from app.plots.tempo import build_tempo_figure
 from app.util.time import setup_refresh_timer
+from app.config import config
 
 
 def should_scan_game(game_id: str) -> bool:
@@ -46,8 +47,8 @@ def should_scan_game(game_id: str) -> bool:
         last_check = st.session_state.not_started_last_check[game_id]
         time_since_check = datetime.now() - last_check
         
-        # Only scan if 10 minutes have passed
-        if time_since_check < timedelta(minutes=10):
+        # Only scan if configured throttle time has passed
+        if time_since_check < timedelta(minutes=config.NOT_STARTED_THROTTLE_MINUTES):
             return False
     
     return True
@@ -87,7 +88,7 @@ def _scan_single_game(game_id: str, now: datetime) -> Tuple[str, str, bool]:
         return game_id, "Not Started", True
 
 
-@st.cache_data(ttl=30)  # Cache status for 30 seconds
+@st.cache_data(ttl=config.CACHE_TTL_STATUS)  # Cache status for configured duration
 def get_game_statuses(game_ids: List[str]) -> Dict[str, str]:
     """Get game statuses for a list of game IDs using parallel processing.
     
@@ -131,8 +132,8 @@ def get_game_statuses(game_ids: List[str]) -> Dict[str, str]:
     # Process games that need scanning in parallel
     if games_to_scan:
         # Use ThreadPoolExecutor for I/O-bound operations (API calls)
-        # Max workers: 5 to avoid overwhelming the API
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        # Max workers: configured to avoid overwhelming the API
+        with ThreadPoolExecutor(max_workers=config.MAX_WORKERS) as executor:
             # Submit all tasks
             future_to_game = {
                 executor.submit(_scan_single_game, game_id, now): game_id
@@ -224,7 +225,7 @@ def process_game(game_id: str):
     return tfs_df, raw_pbp
 
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=config.CACHE_TTL_STATUS)
 def get_game_data(game_id: str):
     """Get processed game data with caching.
     
@@ -466,9 +467,11 @@ def _render_content():
     tab_names = []
     tab_games = []
     
-    # Order: Early 1H, First Half, Halftime, Second Half, Complete, Not Started
+    # Order for display: Early 1H, First Half, Halftime, Second Half, Complete, Not Started
     status_order = ["Early 1H", "First Half", "Halftime", "Second Half", "Complete", "Not Started"]
     
+    # Build all tabs first
+    all_tabs_data = []
     for status in status_order:
         games = games_by_status[status]
         if games:  # Only create tab if there are games
@@ -479,12 +482,39 @@ def _render_content():
                 key=lambda gid: (rotation_numbers.get(gid) is None, rotation_numbers.get(gid) or 0),
                 reverse=True
             )
-            tab_names.append(f"{status} ({len(games)})")
-            tab_games.append((status, games_sorted))
+            all_tabs_data.append({
+                'status': status,
+                'name': f"{status} ({len(games)})",
+                'games': games_sorted
+            })
     
-    if not tab_games:
+    if not all_tabs_data:
         render_info("No games available for the selected date and board filter.")
         return
+    
+    # Priority order for default tab selection (first available gets selected)
+    default_priority = ["Halftime", "First Half", "Early 1H", "Second Half", "Complete"]
+    
+    # Find the index of the highest priority available tab
+    default_tab_idx = 0
+    for priority_status in default_priority:
+        for idx, tab_data in enumerate(all_tabs_data):
+            if tab_data['status'] == priority_status:
+                default_tab_idx = idx
+                break
+        else:
+            continue
+        break  # Found the priority tab, stop searching
+    
+    # Reorder tabs so the default tab is first (Streamlit selects first tab by default)
+    if default_tab_idx > 0:
+        all_tabs_data = [all_tabs_data[default_tab_idx]] + \
+                       [tab for idx, tab in enumerate(all_tabs_data) if idx != default_tab_idx]
+    
+    # Build final tab lists
+    for tab_data in all_tabs_data:
+        tab_names.append(tab_data['name'])
+        tab_games.append((tab_data['status'], tab_data['games']))
     
     # Create tabs
     tabs = st.tabs(tab_names)
@@ -501,7 +531,7 @@ def _render_content():
                 continue
             
             # Render games in grid
-            rows = create_game_grid(game_list, cols_per_row=2)
+            rows = create_game_grid(game_list, cols_per_row=config.COLS_PER_ROW)
             
             for row_idx, row in enumerate(rows):
                 columns = st.columns(len(row))
@@ -530,5 +560,5 @@ def _render_content():
 
 if __name__ == "__main__":
     render()
-    setup_refresh_timer(30)
+    setup_refresh_timer(config.REFRESH_INTERVAL)
 

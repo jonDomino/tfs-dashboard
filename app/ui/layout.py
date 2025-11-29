@@ -1,9 +1,10 @@
 """Layout utilities"""
 import streamlit as st
 from typing import List, Callable, Any
+from app.config import config
 
 
-def create_game_grid(game_ids: List[str], cols_per_row: int = 2) -> List[List[str]]:
+def create_game_grid(game_ids: List[str], cols_per_row: int = config.COLS_PER_ROW) -> List[List[str]]:
     """Create grid layout for games.
     
     Args:
@@ -22,7 +23,7 @@ def create_game_grid(game_ids: List[str], cols_per_row: int = 2) -> List[List[st
 def render_game_grid(
     game_ids: List[str],
     render_func: Callable[[str], Any],
-    cols_per_row: int = 2
+    cols_per_row: int = config.COLS_PER_ROW
 ):
     """Render games in a grid layout.
     
