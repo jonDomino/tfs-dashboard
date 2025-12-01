@@ -35,22 +35,30 @@ This is a comprehensive code review of the TFS (Time to First Shot) Kernel Dashb
      - Priority order: Halftime > First Half > Early 1H > Second Half > Complete > alphabetical
 
 4. **Expected TFS Calculation**
-   - Game-level: `27.65 - 0.08 * closing_total` (reference line)
-   - Possession-level (by type):
-     - Oppo Made Shot: `36.4397 + (-0.1025 * closing_total)`
-     - Rebound: `24.2977 + (-0.0692 * closing_total)`
-     - Turnover: `23.9754 + (-0.0619 * closing_total)`
-     - Period Start: Uses rebound formula
+   - Game-level: `27.65 - 0.08 * closing_total` (reference line, backward compatibility)
+   - **Period 1 formulas** (by possession start type):
+     - Turnover: `TFS = 23.4283 + -0.068865 * closing_total`
+     - Rebound: `TFS = 23.2206 + -0.070364 * closing_total`
+     - Oppo Made Shot: `TFS = 35.8503 + -0.105015 * closing_total`
+     - Oppo Made FT: `TFS = 28.1118 + -0.065201 * closing_total`
+   - **Period 2 formulas** (include score differential):
+     - Turnover: `TFS = 22.0475 + -0.057148 * closing_total + -0.061952 * score_diff`
+     - Rebound: `TFS = 24.2071 + -0.072452 * closing_total + -0.045162 * score_diff`
+     - Oppo Made Shot: `TFS = 35.0632 + -0.097778 * closing_total + -0.034749 * score_diff`
+     - Oppo Made FT: `TFS = 29.7614 + -0.073256 * closing_total + -0.030282 * score_diff`
+   - Score differential (`score_diff`) is calculated as `abs(max(away_score) - max(home_score))` from Period 1 data
+   - Formulas automatically switch based on `period_number` and availability of `score_diff`
 
 5. **Visual Indicators**
    - Red shading: Actual tempo slower than possession-level expected
    - Green shading: Actual tempo faster than possession-level expected
    - Residual statistics table (subplot below main plot):
      - Columns: Metric, Count, Mean Res, Median Res, % Slower
-     - Rows: Overall, Made Shot, Rebound, Turnover
+     - Rows: Overall, Made Shot, Made FT, Rebound, Turnover
      - Color-coded cells:
        - Mean Res & Median Res: Positive (red) = slower than expected, Negative (green) = faster than expected
        - % Slower: >50% (red), <=50% (green)
+   - Possession start types: rebound, turnover, oppo_made_shot, oppo_made_ft (period_start removed from visualizations)
    - Rotation numbers: Displayed in top-left margin of each plot (dark gray text)
    - Games sorted by rotation number descending (higher rotation numbers first)
 
@@ -107,8 +115,8 @@ dashboard/
 │   │   ├── bigquery_loader.py
 │   │   ├── efg.py
 │   │   ├── get_sched.py
-│   │   └── get_pbp.py
-│   ├── tfs/           # TFS computation
+│   │   └── get_pbp.py (uses pagination from build_tfs)
+│   ├── tfs/           # TFS computation (imports from build_tfs)
 │   │   ├── preprocess.py
 │   │   ├── compute.py
 │   │   ├── change_points.py
@@ -128,8 +136,13 @@ dashboard/
 │   │   ├── style.py
 │   │   └── time.py
 │   └── main.py        # Main application (500 lines)
-├── builders/          # Action time processing pipeline
-│   └── action_time/
+├── build_tfs/         # Standalone TFS processing module
+│   ├── get_pbp.py     # ESPN API with pagination (handles >500 plays)
+│   ├── preprocess.py  # Preprocessing orchestrator
+│   ├── compute.py     # TFS computation
+│   ├── process_game.py # Main entry point
+│   └── builders/      # Action time processing pipeline
+│       └── action_time/
 └── streamlit_app.py   # Entry point
 ```
 

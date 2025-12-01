@@ -9,27 +9,37 @@ This is a **Streamlit dashboard** for real-time monitoring of **Time to First Sh
 ### Recent Work Completed
 
 #### Latest Features (Most Recent)
+1. ✅ **Period-Specific Expected TFS**: Split expected TFS calculations into Period 1 and Period 2 formulas
+   - Period 2 formulas include score differential (abs(away_score - home_score) at end of Period 1)
+   - Automatically calculates score_diff from Period 1 data
+2. ✅ **New Possession Start Type**: Added `oppo_made_ft` (opponent made free throw) as separate type from `oppo_made_shot`
+   - Different expected TFS formulas due to clock stopping behavior
+   - Fully integrated in plots, legends, and residual calculations
+3. ✅ **Pipeline Refactoring**: Switched from `builders/` to `build_tfs/builders/` directory
+   - Fixed ESPN PBP API pagination to handle games with >500 plays
+   - Removed old `builders/` directory
+4. ✅ **Removed Period Start**: Dropped `period_start` from all visualizations and legends
+   - No longer shown in plots or residual statistics table
+
+#### Previous Improvements
 1. ✅ **Rotation Numbers Display**: Added away team rotation numbers to plots (displayed in top-left margin, dark gray text)
 2. ✅ **Rotation-Based Sorting**: Games sorted by rotation number descending (higher rotation numbers appear first)
 3. ✅ **Default Tab Selection**: Dashboard automatically opens to highest priority available tab:
    - Priority order: Halftime > First Half > Early 1H > Second Half > Complete > alphabetical
-4. ✅ **Residuals Table Update**: Renamed "% Faster" column to "% Slower" to match shading logic
-
-#### Previous Improvements
-1. ✅ **Possession-level Expected TFS**: Implemented dynamic expected TFS calculation based on `poss_start_type` (rebound, turnover, oppo_made_shot) with different formulas for each type
-2. ✅ **Dual Expected TFS Lines**: Shows both game-level (flat dashed line) and possession-level (smooth trend line) expected TFS
-3. ✅ **Shading Logic**: Red/green shading compares actual kernel curve vs possession-level expected kernel (not game-level)
-4. ✅ **Enhanced Residual Statistics Table**: Comprehensive data table below main tempo plot with:
+4. ✅ **Possession-level Expected TFS**: Implemented dynamic expected TFS calculation based on `poss_start_type` with different formulas for each type
+5. ✅ **Dual Expected TFS Lines**: Shows both game-level (flat dashed line) and possession-level (smooth trend line) expected TFS
+6. ✅ **Shading Logic**: Red/green shading compares actual kernel curve vs possession-level expected kernel (not game-level)
+7. ✅ **Enhanced Residual Statistics Table**: Comprehensive data table below main tempo plot with:
    - Columns: Metric, Count, Mean Res, Median Res, % Slower
-   - Rows: Overall, Made Shot, Rebound, Turnover
+   - Rows: Overall, Made Shot, Made FT, Rebound, Turnover
    - Color-coded cells:
      - Mean Res & Median Res: Positive (red) = slower than expected, Negative (green) = faster
      - % Slower: >50% (red), <=50% (green)
-5. ✅ **File Cleanup**: Removed duplicate files, obsolete documentation, and git debugging files
-6. ✅ **Git History Cleanup**: Removed credentials from git history using orphan branch approach
-7. ✅ **Timezone Fix**: Converted all game dates to PST at pipeline entry to fix filtering issues
-8. ✅ **Possession Start Legend**: Moved from individual plots to sidebar as single legend
-9. ✅ **Code Review**: Created comprehensive `CODE_REVIEW.md` documenting requirements and refactoring recommendations
+8. ✅ **File Cleanup**: Removed duplicate files, obsolete documentation, and git debugging files
+9. ✅ **Git History Cleanup**: Removed credentials from git history using orphan branch approach
+10. ✅ **Timezone Fix**: Converted all game dates to PST at pipeline entry to fix filtering issues
+11. ✅ **Possession Start Legend**: Moved from individual plots to sidebar as single legend
+12. ✅ **Code Review**: Created comprehensive `CODE_REVIEW.md` documenting requirements and refactoring recommendations
 
 ### Current Status
 
@@ -55,10 +65,15 @@ This is a **Streamlit dashboard** for real-time monitoring of **Time to First Sh
   - `get_pbp.py` - ESPN API wrapper for PBP
 
 ### TFS Processing
-- `app/tfs/preprocess.py` - Preprocessing pipeline
-- `app/tfs/compute.py` - TFS computation
+- `app/tfs/preprocess.py` - Preprocessing pipeline (imports from build_tfs)
+- `app/tfs/compute.py` - TFS computation (imports from build_tfs)
 - `app/tfs/change_points.py` - CUSUM change-point detection
-- `builders/action_time/` - Action time processing pipeline
+- `build_tfs/` - Standalone TFS processing module
+  - `get_pbp.py` - ESPN API wrapper with pagination support (handles >500 plays)
+  - `preprocess.py` - Preprocessing orchestrator
+  - `compute.py` - TFS computation and filtering
+  - `process_game.py` - Main entry point for processing games
+  - `builders/action_time/` - Action time processing pipeline modules
 
 ### Visualization
 - `app/plots/tempo.py` - Main tempo plot (526 lines - needs refactoring)
@@ -69,7 +84,7 @@ This is a **Streamlit dashboard** for real-time monitoring of **Time to First Sh
   - Rotation number display (top-left margin, dark gray text)
   - Enhanced residual statistics table (subplot below main plot):
     - Columns: Metric, Count, Mean Res, Median Res, % Slower
-    - Rows: Overall, Made Shot, Rebound, Turnover
+    - Rows: Overall, Made Shot, Made FT, Rebound, Turnover
     - Color-coded: Positive residuals (red), Negative residuals (green)
     - % Slower: >50% (red), <=50% (green)
 
@@ -86,12 +101,22 @@ This is a **Streamlit dashboard** for real-time monitoring of **Time to First Sh
 ## Key Features & Requirements
 
 ### Expected TFS Formulas
-- **Game-level**: `27.65 - 0.08 * closing_total` (reference line)
-- **Possession-level**:
-  - Oppo Made Shot: `36.4397 + (-0.1025 * closing_total)`
-  - Rebound: `24.2977 + (-0.0692 * closing_total)`
-  - Turnover: `23.9754 + (-0.0619 * closing_total)`
-  - Period Start: Uses rebound formula
+
+**Game-level**: `27.65 - 0.08 * closing_total` (reference line, backward compatibility)
+
+**Period 1 Formulas**:
+- **Turnover**: `TFS = 23.4283 + -0.068865 * closing_total`
+- **Rebound**: `TFS = 23.2206 + -0.070364 * closing_total`
+- **Oppo Made Shot**: `TFS = 35.8503 + -0.105015 * closing_total`
+- **Oppo Made FT**: `TFS = 28.1118 + -0.065201 * closing_total`
+
+**Period 2 Formulas** (include score differential):
+- **Turnover**: `TFS = 22.0475 + -0.057148 * closing_total + -0.061952 * score_diff`
+- **Rebound**: `TFS = 24.2071 + -0.072452 * closing_total + -0.045162 * score_diff`
+- **Oppo Made Shot**: `TFS = 35.0632 + -0.097778 * closing_total + -0.034749 * score_diff`
+- **Oppo Made FT**: `TFS = 29.7614 + -0.073256 * closing_total + -0.030282 * score_diff`
+
+**Note**: `score_diff` is calculated as `abs(max(away_score) - max(home_score))` from Period 1 data. Formulas automatically switch based on `period_number` and availability of `score_diff`.
 
 ### Game Status Classification
 - **Early 1H**: Period 1, >600 seconds remaining
@@ -126,14 +151,10 @@ See `CODE_REVIEW.md` for detailed refactoring recommendations.
 ## Recent Git History
 
 ```
-713e9bf - Make rotation number text much darker
-d942eef - Darken rotation number text to 75% black, 25% gray
-c49103b - Add rotation numbers to plots: display in top-left margin and sort by rotation desc
-538b351 - Rename % Faster column to % Slower
-151eca5 - Rename % Above column to % Faster and flip shading logic: >50%=red, <=50%=green
-e1029c0 - Update CODE_REVIEW.md and CONTEXT.md: reflect current state
-820a7c3 - Enhance residuals table: add Count and Median Res columns, rename Residuals to Mean Res, update color shading
-d0a6e90 - Remove test deployment text from plots
+6aae134 - Fix circular import: remove unused preprocess_pbp import from compute.py
+021390a - Update Period 2 expected TFS formulas with new coefficients
+af7ee1a - Update expected TFS formulas: split into Period 1 and Period 2 with score_diff
+ae4826b - Refactor: Switch pipeline to build_tfs, add oppo_made_ft support, remove period_start
 ```
 
 **Note**: Repository has clean history. Previous credentials have been removed.
@@ -164,7 +185,13 @@ dashboard/
 │   ├── ui/            # UI components (selectors, renderer, layout)
 │   ├── util/          # Utilities (cache, kernel, style, time)
 │   └── main.py        # Main application (needs refactoring)
-├── builders/          # Action time processing pipeline
+├── build_tfs/         # Standalone TFS processing module
+│   ├── get_pbp.py     # ESPN API with pagination (handles >500 plays)
+│   ├── preprocess.py  # Preprocessing orchestrator
+│   ├── compute.py     # TFS computation
+│   ├── process_game.py # Main entry point
+│   └── builders/      # Action time processing pipeline
+│       └── action_time/
 ├── streamlit_app.py   # Entry point
 └── CODE_REVIEW.md     # Comprehensive code review & refactoring plan
 ```
