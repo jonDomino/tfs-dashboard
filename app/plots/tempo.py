@@ -569,8 +569,8 @@ def build_tempo_figure(
                 ])
         
         # Create table with 13 columns
-        col_labels = ["Metric", "P1 Count", "P2 Count", "Gm Count", "P1 Mean", "P2 Mean", "Gm Mean", 
-                     "P1 Median", "P2 Median", "Gm Median", "P1 % Slower", "P2 % Slower", "Gm % Slower"]
+        col_labels = ["Metric", "P1 Cnt", "P2 Cnt", "Gm Cnt", "P1 Mean", "P2 Mean", "Gm Mean", 
+                     "P1 Med", "P2 Med", "Gm Med", "P1 Slow%", "P2 Slow%", "Gm Slow%"]
         table = ax_residual.table(
             cellText=table_data,
             colLabels=col_labels,
