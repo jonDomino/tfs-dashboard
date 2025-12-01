@@ -97,13 +97,23 @@ def build_tempo_figure(
         try:
             from app.data.bigquery_loader import calculate_expected_tfs
             
-            # Calculate residuals for each possession
+            # Calculate residuals for each possession, tracking by period and type
             residuals = []
-            residuals_by_type = {"rebound": [], "turnover": [], "oppo_made_shot": [], "oppo_made_ft": [], "other": []}
-            above_exp_count_by_type = {"rebound": 0, "turnover": 0, "oppo_made_shot": 0, "oppo_made_ft": 0, "other": 0}
-            total_count_by_type = {"rebound": 0, "turnover": 0, "oppo_made_shot": 0, "oppo_made_ft": 0, "other": 0}
+            residuals_p1 = []
+            residuals_p2 = []
+            
+            # Track by type and period
+            residuals_by_type_p1 = {"rebound": [], "turnover": [], "oppo_made_shot": [], "oppo_made_ft": [], "other": []}
+            residuals_by_type_p2 = {"rebound": [], "turnover": [], "oppo_made_shot": [], "oppo_made_ft": [], "other": []}
+            
+            above_exp_count_by_type_p1 = {"rebound": 0, "turnover": 0, "oppo_made_shot": 0, "oppo_made_ft": 0, "other": 0}
+            above_exp_count_by_type_p2 = {"rebound": 0, "turnover": 0, "oppo_made_shot": 0, "oppo_made_ft": 0, "other": 0}
+            total_count_by_type_p1 = {"rebound": 0, "turnover": 0, "oppo_made_shot": 0, "oppo_made_ft": 0, "other": 0}
+            total_count_by_type_p2 = {"rebound": 0, "turnover": 0, "oppo_made_shot": 0, "oppo_made_ft": 0, "other": 0}
+            
             above_exp_count = 0
-            below_exp_count = 0
+            above_exp_count_p1 = 0
+            above_exp_count_p2 = 0
             
             for idx in range(len(tfs_df)):
                 actual_tfs = float(tfs_df.iloc[idx]["action_time"])
@@ -122,53 +132,132 @@ def build_tempo_figure(
                 residual = actual_tfs - expected_tfs
                 residuals.append(residual)
                 
-                # Track by type
-                if poss_type in residuals_by_type:
-                    residuals_by_type[poss_type].append(residual)
-                    total_count_by_type[poss_type] += 1
+                # Track by period
+                if period_num == 1:
+                    residuals_p1.append(residual)
                     if residual > 0:
-                        above_exp_count_by_type[poss_type] += 1
+                        above_exp_count_p1 += 1
+                elif period_num and period_num >= 2:
+                    residuals_p2.append(residual)
+                    if residual > 0:
+                        above_exp_count_p2 += 1
+                
+                # Track by type and period
+                if poss_type in residuals_by_type_p1:
+                    if period_num == 1:
+                        residuals_by_type_p1[poss_type].append(residual)
+                        total_count_by_type_p1[poss_type] += 1
+                        if residual > 0:
+                            above_exp_count_by_type_p1[poss_type] += 1
+                    elif period_num and period_num >= 2:
+                        residuals_by_type_p2[poss_type].append(residual)
+                        total_count_by_type_p2[poss_type] += 1
+                        if residual > 0:
+                            above_exp_count_by_type_p2[poss_type] += 1
                 else:
-                    residuals_by_type["other"].append(residual)
-                    total_count_by_type["other"] += 1
-                    if residual > 0:
-                        above_exp_count_by_type["other"] += 1
+                    if period_num == 1:
+                        residuals_by_type_p1["other"].append(residual)
+                        total_count_by_type_p1["other"] += 1
+                        if residual > 0:
+                            above_exp_count_by_type_p1["other"] += 1
+                    elif period_num and period_num >= 2:
+                        residuals_by_type_p2["other"].append(residual)
+                        total_count_by_type_p2["other"] += 1
+                        if residual > 0:
+                            above_exp_count_by_type_p2["other"] += 1
                 
                 # Count above/below (overall)
                 if residual > 0:
                     above_exp_count += 1
-                else:
-                    below_exp_count += 1
             
-            # Calculate statistics
+            # Calculate overall statistics
             avg_residual = np.mean(residuals) if residuals else 0.0
+            median_residual = np.median(residuals) if residuals else 0.0
             total_poss = len(residuals)
             pct_above = (above_exp_count / total_poss * 100) if total_poss > 0 else 0.0
             
-            # Calculate average residual, median residual, and % above by type
+            # Calculate Period 1 statistics
+            avg_residual_p1 = np.mean(residuals_p1) if residuals_p1 else 0.0
+            median_residual_p1 = np.median(residuals_p1) if residuals_p1 else 0.0
+            total_poss_p1 = len(residuals_p1)
+            pct_above_p1 = (above_exp_count_p1 / total_poss_p1 * 100) if total_poss_p1 > 0 else 0.0
+            
+            # Calculate Period 2 statistics
+            avg_residual_p2 = np.mean(residuals_p2) if residuals_p2 else 0.0
+            median_residual_p2 = np.median(residuals_p2) if residuals_p2 else 0.0
+            total_poss_p2 = len(residuals_p2)
+            pct_above_p2 = (above_exp_count_p2 / total_poss_p2 * 100) if total_poss_p2 > 0 else 0.0
+            
+            # Calculate statistics by type for Period 1
+            avg_by_type_p1 = {}
+            median_by_type_p1 = {}
+            pct_above_by_type_p1 = {}
+            count_by_type_p1 = {}
+            for poss_type, res_list in residuals_by_type_p1.items():
+                if res_list:
+                    avg_by_type_p1[poss_type] = np.mean(res_list)
+                    median_by_type_p1[poss_type] = np.median(res_list)
+                    pct_above_by_type_p1[poss_type] = (above_exp_count_by_type_p1[poss_type] / total_count_by_type_p1[poss_type] * 100) if total_count_by_type_p1[poss_type] > 0 else 0.0
+                    count_by_type_p1[poss_type] = total_count_by_type_p1[poss_type]
+            
+            # Calculate statistics by type for Period 2
+            avg_by_type_p2 = {}
+            median_by_type_p2 = {}
+            pct_above_by_type_p2 = {}
+            count_by_type_p2 = {}
+            for poss_type, res_list in residuals_by_type_p2.items():
+                if res_list:
+                    avg_by_type_p2[poss_type] = np.mean(res_list)
+                    median_by_type_p2[poss_type] = np.median(res_list)
+                    pct_above_by_type_p2[poss_type] = (above_exp_count_by_type_p2[poss_type] / total_count_by_type_p2[poss_type] * 100) if total_count_by_type_p2[poss_type] > 0 else 0.0
+                    count_by_type_p2[poss_type] = total_count_by_type_p2[poss_type]
+            
+            # Calculate overall statistics by type (for backward compatibility)
             avg_by_type = {}
             median_by_type = {}
             pct_above_by_type = {}
             count_by_type = {}
-            for poss_type, res_list in residuals_by_type.items():
-                if res_list:
-                    avg_by_type[poss_type] = np.mean(res_list)
-                    median_by_type[poss_type] = np.median(res_list)
-                    pct_above_by_type[poss_type] = (above_exp_count_by_type[poss_type] / total_count_by_type[poss_type] * 100) if total_count_by_type[poss_type] > 0 else 0.0
-                    count_by_type[poss_type] = total_count_by_type[poss_type]
-            
-            # Calculate overall median
-            median_residual = np.median(residuals) if residuals else 0.0
+            for poss_type in ["rebound", "turnover", "oppo_made_shot", "oppo_made_ft", "other"]:
+                all_res = residuals_by_type_p1.get(poss_type, []) + residuals_by_type_p2.get(poss_type, [])
+                if all_res:
+                    avg_by_type[poss_type] = np.mean(all_res)
+                    median_by_type[poss_type] = np.median(all_res)
+                    total_count = total_count_by_type_p1.get(poss_type, 0) + total_count_by_type_p2.get(poss_type, 0)
+                    above_count = above_exp_count_by_type_p1.get(poss_type, 0) + above_exp_count_by_type_p2.get(poss_type, 0)
+                    pct_above_by_type[poss_type] = (above_count / total_count * 100) if total_count > 0 else 0.0
+                    count_by_type[poss_type] = total_count
             
             residual_data = {
+                # Overall (Game)
                 "avg_residual": avg_residual,
                 "median_residual": median_residual,
+                "pct_above": pct_above,
+                "total_poss": total_poss,
+                # Period 1
+                "avg_residual_p1": avg_residual_p1,
+                "median_residual_p1": median_residual_p1,
+                "pct_above_p1": pct_above_p1,
+                "total_poss_p1": total_poss_p1,
+                # Period 2
+                "avg_residual_p2": avg_residual_p2,
+                "median_residual_p2": median_residual_p2,
+                "pct_above_p2": pct_above_p2,
+                "total_poss_p2": total_poss_p2,
+                # By type (overall)
                 "avg_by_type": avg_by_type,
                 "median_by_type": median_by_type,
-                "pct_above": pct_above,
                 "pct_above_by_type": pct_above_by_type,
-                "total_poss": total_poss,
-                "count_by_type": count_by_type
+                "count_by_type": count_by_type,
+                # By type Period 1
+                "avg_by_type_p1": avg_by_type_p1,
+                "median_by_type_p1": median_by_type_p1,
+                "pct_above_by_type_p1": pct_above_by_type_p1,
+                "count_by_type_p1": count_by_type_p1,
+                # By type Period 2
+                "avg_by_type_p2": avg_by_type_p2,
+                "median_by_type_p2": median_by_type_p2,
+                "pct_above_by_type_p2": pct_above_by_type_p2,
+                "count_by_type_p2": count_by_type_p2,
             }
         except Exception as e:
             # If calculation fails, skip residual chart
@@ -410,7 +499,7 @@ def build_tempo_figure(
     
     # Add residual statistics table below if we have residual data
     if ax_residual is not None and residual_data:
-        # Prepare data for table with 5 columns: Metric, Count, Mean Res, Median Res, % Slower
+        # Prepare data for table with columns: Metric, P1 Count, P2 Count, Gm Count, P1 Mean, P2 Mean, Gm Mean, P1 Median, P2 Median, Gm Median, P1 % Slower, P2 % Slower, Gm % Slower
         type_labels_display = {
             "oppo_made_shot": "Made Shot",
             "oppo_made_ft": "Made FT",
@@ -421,34 +510,70 @@ def build_tempo_figure(
         # Build table data: rows are Overall, Made Shot, Made FT, Rebound, Turnover
         table_data = []
         
+        # Helper function to format value or return "-" if not available
+        def fmt_val(val, default="-"):
+            if val is None or (isinstance(val, float) and np.isnan(val)):
+                return default
+            return val
+        
         # Overall row
         table_data.append([
             "Overall",
-            str(residual_data['total_poss']),
-            f"{residual_data['avg_residual']:+.1f}s",
-            f"{residual_data['median_residual']:+.1f}s",
-            f"{residual_data['pct_above']:.1f}%"
+            str(residual_data.get('total_poss_p1', 0)),
+            str(residual_data.get('total_poss_p2', 0)),
+            str(residual_data.get('total_poss', 0)),
+            f"{residual_data.get('avg_residual_p1', 0):+.1f}s" if residual_data.get('total_poss_p1', 0) > 0 else "-",
+            f"{residual_data.get('avg_residual_p2', 0):+.1f}s" if residual_data.get('total_poss_p2', 0) > 0 else "-",
+            f"{residual_data.get('avg_residual', 0):+.1f}s",
+            f"{residual_data.get('median_residual_p1', 0):+.1f}s" if residual_data.get('total_poss_p1', 0) > 0 else "-",
+            f"{residual_data.get('median_residual_p2', 0):+.1f}s" if residual_data.get('total_poss_p2', 0) > 0 else "-",
+            f"{residual_data.get('median_residual', 0):+.1f}s",
+            f"{residual_data.get('pct_above_p1', 0):.1f}%" if residual_data.get('total_poss_p1', 0) > 0 else "-",
+            f"{residual_data.get('pct_above_p2', 0):.1f}%" if residual_data.get('total_poss_p2', 0) > 0 else "-",
+            f"{residual_data.get('pct_above', 0):.1f}%"
         ])
         
         # Add possession type rows (Made Shot, Made FT, Rebound, Turnover)
         for poss_type in ["oppo_made_shot", "oppo_made_ft", "rebound", "turnover"]:
-            if poss_type in residual_data['avg_by_type']:
-                count = residual_data['count_by_type'].get(poss_type, 0)
-                avg_res = residual_data['avg_by_type'][poss_type]
-                median_res = residual_data['median_by_type'].get(poss_type, 0.0)
-                pct_above = residual_data['pct_above_by_type'].get(poss_type, 0.0)
+            count_p1 = residual_data['count_by_type_p1'].get(poss_type, 0)
+            count_p2 = residual_data['count_by_type_p2'].get(poss_type, 0)
+            count_gm = residual_data['count_by_type'].get(poss_type, 0)
+            
+            if count_gm > 0:  # Only add row if there's data
+                avg_p1 = residual_data['avg_by_type_p1'].get(poss_type, 0.0) if count_p1 > 0 else None
+                avg_p2 = residual_data['avg_by_type_p2'].get(poss_type, 0.0) if count_p2 > 0 else None
+                avg_gm = residual_data['avg_by_type'].get(poss_type, 0.0)
+                
+                median_p1 = residual_data['median_by_type_p1'].get(poss_type, 0.0) if count_p1 > 0 else None
+                median_p2 = residual_data['median_by_type_p2'].get(poss_type, 0.0) if count_p2 > 0 else None
+                median_gm = residual_data['median_by_type'].get(poss_type, 0.0)
+                
+                pct_p1 = residual_data['pct_above_by_type_p1'].get(poss_type, 0.0) if count_p1 > 0 else None
+                pct_p2 = residual_data['pct_above_by_type_p2'].get(poss_type, 0.0) if count_p2 > 0 else None
+                pct_gm = residual_data['pct_above_by_type'].get(poss_type, 0.0)
+                
                 table_data.append([
                     type_labels_display[poss_type],
-                    str(count),
-                    f"{avg_res:+.1f}s",
-                    f"{median_res:+.1f}s",
-                    f"{pct_above:.1f}%"
+                    str(count_p1),
+                    str(count_p2),
+                    str(count_gm),
+                    f"{avg_p1:+.1f}s" if avg_p1 is not None else "-",
+                    f"{avg_p2:+.1f}s" if avg_p2 is not None else "-",
+                    f"{avg_gm:+.1f}s",
+                    f"{median_p1:+.1f}s" if median_p1 is not None else "-",
+                    f"{median_p2:+.1f}s" if median_p2 is not None else "-",
+                    f"{median_gm:+.1f}s",
+                    f"{pct_p1:.1f}%" if pct_p1 is not None else "-",
+                    f"{pct_p2:.1f}%" if pct_p2 is not None else "-",
+                    f"{pct_gm:.1f}%"
                 ])
         
-        # Create table with 5 columns
+        # Create table with 13 columns
+        col_labels = ["Metric", "P1 Count", "P2 Count", "Gm Count", "P1 Mean", "P2 Mean", "Gm Mean", 
+                     "P1 Median", "P2 Median", "Gm Median", "P1 % Slower", "P2 % Slower", "Gm % Slower"]
         table = ax_residual.table(
             cellText=table_data,
-            colLabels=["Metric", "Count", "Mean Res", "Median Res", "% Slower"],
+            colLabels=col_labels,
             cellLoc='center',
             loc='center',
             bbox=[0, 0, 1, 1]
@@ -456,17 +581,52 @@ def build_tempo_figure(
         
         # Style the table
         table.auto_set_font_size(False)
-        table.set_fontsize(8)
+        table.set_fontsize(7)  # Smaller font to fit more columns
         table.scale(1, 2)
         
         # Style header row (row 0 in matplotlib table)
-        for j in range(5):
+        for j in range(len(col_labels)):
             table[(0, j)].set_facecolor('#4472C4')
             table[(0, j)].set_text_props(weight='bold', color='white')
         
         # Color code data cells
         for i, row in enumerate(table_data):
             row_idx = i + 1  # Data rows start at index 1 (after header)
+            # Color code Mean columns (indices 4, 5, 6)
+            for col_idx in [4, 5, 6]:
+                if col_idx < len(row) and row[col_idx] != "-":
+                    try:
+                        val = float(row[col_idx].replace("s", ""))
+                        if val > 0:
+                            table[(row_idx, col_idx)].set_facecolor('#ffcccc')  # Light red
+                        else:
+                            table[(row_idx, col_idx)].set_facecolor('#ccffcc')  # Light green
+                    except:
+                        pass
+            
+            # Color code Median columns (indices 7, 8, 9)
+            for col_idx in [7, 8, 9]:
+                if col_idx < len(row) and row[col_idx] != "-":
+                    try:
+                        val = float(row[col_idx].replace("s", ""))
+                        if val > 0:
+                            table[(row_idx, col_idx)].set_facecolor('#ffcccc')  # Light red
+                        else:
+                            table[(row_idx, col_idx)].set_facecolor('#ccffcc')  # Light green
+                    except:
+                        pass
+            
+            # Color code % Slower columns (indices 10, 11, 12)
+            for col_idx in [10, 11, 12]:
+                if col_idx < len(row) and row[col_idx] != "-":
+                    try:
+                        val = float(row[col_idx].replace("%", ""))
+                        if val > 50:
+                            table[(row_idx, col_idx)].set_facecolor('#ffcccc')  # Light red
+                        else:
+                            table[(row_idx, col_idx)].set_facecolor('#ccffcc')  # Light green
+                    except:
+                        pass
             
             # Column 0: Metric column (light gray)
             table[(row_idx, 0)].set_facecolor('#F0F0F0')
