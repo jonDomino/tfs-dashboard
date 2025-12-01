@@ -267,16 +267,13 @@ def build_tempo_figure(
     
     # Create figure with subplots if we have residual data, otherwise single plot
     if residual_data:
-        # Create grid: main plot on top, score chart bottom left, residuals table bottom right
-        fig = plt.figure(figsize=(style["figsize"][0], style["figsize"][1] * 1.3))
-        gs = fig.add_gridspec(2, 2, height_ratios=[3, 1], width_ratios=[1, 1], hspace=0.3, wspace=0.3)
-        ax = fig.add_subplot(gs[0, :])  # Main plot spans full width
-        ax_score = fig.add_subplot(gs[1, 0])  # Score chart bottom left
-        ax_residual = fig.add_subplot(gs[1, 1])  # Residuals table bottom right
+        fig, axes = plt.subplots(2, 1, figsize=(style["figsize"][0], style["figsize"][1] * 1.3), 
+                                 height_ratios=[3, 1], sharex=False)
+        ax = axes[0]
+        ax_residual = axes[1]
     else:
         fig, ax = plt.subplots(figsize=style["figsize"])
         ax_residual = None
-        ax_score = None
     
     # Plot raw data with color-coding by poss_start_type
     if "poss_start_type" in tfs_df.columns:
@@ -499,108 +496,6 @@ def build_tempo_figure(
     
     # Create main legend (for lines, change points, etc.)
     ax.legend(loc="upper right", fontsize=style["fontsize_legend"])
-    
-    # Add score chart if we have score data
-    if ax_score is not None and "away_score" in tfs_df.columns and "home_score" in tfs_df.columns and "period_number" in tfs_df.columns:
-        try:
-            # Extract scores by period
-            away_team_name = tfs_df["away_team_name"].iloc[0] if "away_team_name" in tfs_df.columns else "Away"
-            home_team_name = tfs_df["home_team_name"].iloc[0] if "home_team_name" in tfs_df.columns else "Home"
-            
-            # Get max scores for each period
-            periods = sorted(tfs_df["period_number"].unique())
-            score_data = []
-            
-            for period in periods:
-                period_data = tfs_df[tfs_df["period_number"] == period]
-                if len(period_data) > 0:
-                    away_score = period_data["away_score"].max()
-                    home_score = period_data["home_score"].max()
-                    if pd.notna(away_score) and pd.notna(home_score):
-                        score_data.append({
-                            "period": period,
-                            "away_score": int(away_score),
-                            "home_score": int(home_score)
-                        })
-            
-            if score_data:
-                # Build table data
-                table_data = []
-                
-                # Determine period labels
-                period_labels = []
-                for score_row in score_data:
-                    period = score_row["period"]
-                    if period == 1:
-                        period_labels.append("H1")
-                    elif period == 2:
-                        period_labels.append("H2")
-                    elif period > 2:
-                        period_labels.append(f"OT{period - 2}")
-                    else:
-                        period_labels.append(f"P{period}")
-                
-                # Add final score row
-                if len(score_data) > 0:
-                    final_away = score_data[-1]["away_score"]
-                    final_home = score_data[-1]["home_score"]
-                else:
-                    final_away = 0
-                    final_home = 0
-                
-                # Away team row (top)
-                away_row = [away_team_name]
-                for score_row in score_data:
-                    away_row.append(str(score_row["away_score"]))
-                away_row.append(str(final_away))
-                table_data.append(away_row)
-                
-                # Home team row (bottom)
-                home_row = [home_team_name]
-                for score_row in score_data:
-                    home_row.append(str(score_row["home_score"]))
-                home_row.append(str(final_home))
-                table_data.append(home_row)
-                
-                # Column labels
-                col_labels = ["Team"] + period_labels + ["FNL"]
-                
-                # Create table
-                score_table = ax_score.table(
-                    cellText=table_data,
-                    colLabels=col_labels,
-                    cellLoc='center',
-                    loc='center',
-                    bbox=[0, 0, 1, 1]
-                )
-                
-                # Style the table
-                score_table.auto_set_font_size(False)
-                score_table.set_fontsize(9)
-                score_table.scale(1, 2.5)
-                
-                # Style header row
-                for j in range(len(col_labels)):
-                    score_table[(0, j)].set_facecolor('#4472C4')
-                    score_table[(0, j)].set_text_props(weight='bold', color='white')
-                
-                # Style data rows
-                for i in range(len(table_data)):
-                    row_idx = i + 1
-                    # Team name column (light gray)
-                    score_table[(row_idx, 0)].set_facecolor('#F0F0F0')
-                    score_table[(row_idx, 0)].set_text_props(weight='bold')
-                    # Score columns (white)
-                    for j in range(1, len(col_labels)):
-                        score_table[(row_idx, j)].set_facecolor('#FFFFFF')
-                
-                ax_score.axis('off')
-                ax_score.set_title('Score', fontsize=10, fontweight='bold', pad=10)
-        except Exception as e:
-            import traceback
-            print(f"Error creating score chart: {e}")
-            print(traceback.format_exc())
-            ax_score.axis('off')
     
     # Add residual statistics table below if we have residual data
     if ax_residual is not None and residual_data:
