@@ -9,7 +9,6 @@ normalizes boolean dtypes, and infers home/away teams.
 
 import requests
 import pandas as pd
-import os
 
 
 def get_json(url: str):
@@ -120,9 +119,7 @@ def get_pbp(game_id: int) -> pd.DataFrame:
         if col in df.columns:
             df[col] = df[col].fillna(False).astype(bool)
 
-    # ------------------------------------------------------------
     # Assert dtype integrity for pipeline-critical fields
-    # ------------------------------------------------------------
     for critical_col in ["scoring_play", "shooting_play"]:
         assert df[critical_col].dtype == bool, (
             f"{critical_col} must be bool dtype, found {df[critical_col].dtype}"
@@ -131,9 +128,7 @@ def get_pbp(game_id: int) -> pd.DataFrame:
     # Add game_id
     df.insert(0, "game_id", game_id)
 
-    # ------------------------------------------------------------
     # Infer home/away team names and IDs
-    # ------------------------------------------------------------
     home_team_id = away_team_id = home_team_name = away_team_name = None
 
     # Sort by period ascending, clock descending (chronological order)
@@ -190,7 +185,7 @@ def get_pbp(game_id: int) -> pd.DataFrame:
         "priority",
         "modified",
         "team_id",
-        "team_name",       # based on team_location
+        "team_name",
         "team_abbrev",
         "away_team_id",
         "away_team_name",
@@ -199,16 +194,4 @@ def get_pbp(game_id: int) -> pd.DataFrame:
     ]]
 
     return df
-
-
-if __name__ == "__main__":
-    game_id = 401700174
-    df = get_pbp(game_id)
-    print(df.head(10))
-    print(f"\nTotal plays parsed: {len(df)}")
-
-    os.makedirs("data", exist_ok=True)
-    out_path = f"data/pbp_{game_id}.csv"
-    df.to_csv(out_path, index=False)
-    print(f"Saved sample to {out_path}")
 

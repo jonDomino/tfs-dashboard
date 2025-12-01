@@ -221,6 +221,7 @@ def calculate_expected_tfs(closing_total: float, poss_start_type: Optional[str] 
     
     If poss_start_type is provided, uses possession-specific formulas (updated with cleaned TFS data):
     - OPPO_MADE_SHOT: 34.4101 + -0.0978 * closing_total
+    - OPPO_MADE_FT: 36.4397 + -0.1025 * closing_total (clock stops after FTs, typically shorter TFS)
     - REBOUND: 23.2104 + -0.0703 * closing_total
     - TURNOVER: 23.4546 + -0.0690 * closing_total
     
@@ -243,15 +244,16 @@ def calculate_expected_tfs(closing_total: float, poss_start_type: Optional[str] 
         
         if poss_start_type == "oppo_made_shot":
             return 34.4101 + (-0.0978 * closing_total)
+        elif poss_start_type == "oppo_made_ft":
+            # Formula for opponent made free throw (clock stops, typically shorter TFS)
+            # Note: This formula may need calibration with cleaned TFS data
+            return 36.4397 + (-0.1025 * closing_total)
         elif poss_start_type == "rebound":
             return 23.2104 + (-0.0703 * closing_total)
         elif poss_start_type == "turnover":
             return 23.4546 + (-0.0690 * closing_total)
-        # For period_start or other types, use rebound formula as default
-        elif poss_start_type == "period_start":
-            return 23.2104 + (-0.0703 * closing_total)
         else:
-            # Unknown type, use rebound as default
+            # Unknown type (including period_start), use rebound formula as default
             return 23.2104 + (-0.0703 * closing_total)
     
     # Fallback to old game-level formula if no poss_start_type

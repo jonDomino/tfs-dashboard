@@ -1,7 +1,6 @@
 """TFS computation and filtering"""
 import pandas as pd
-from build_tfs.builders.action_time.build_tfs_detailed import build_tfs_detailed
-from app.tfs.preprocess import preprocess_pbp
+from builders.action_time.build_tfs_detailed import build_tfs_detailed
 
 
 def compute_tfs(df: pd.DataFrame) -> pd.DataFrame:

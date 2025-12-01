@@ -88,9 +88,9 @@ def build_tempo_figure(
             
             # Calculate residuals for each possession
             residuals = []
-            residuals_by_type = {"rebound": [], "turnover": [], "oppo_made_shot": [], "period_start": [], "other": []}
-            above_exp_count_by_type = {"rebound": 0, "turnover": 0, "oppo_made_shot": 0, "period_start": 0, "other": 0}
-            total_count_by_type = {"rebound": 0, "turnover": 0, "oppo_made_shot": 0, "period_start": 0, "other": 0}
+            residuals_by_type = {"rebound": [], "turnover": [], "oppo_made_shot": [], "oppo_made_ft": [], "other": []}
+            above_exp_count_by_type = {"rebound": 0, "turnover": 0, "oppo_made_shot": 0, "oppo_made_ft": 0, "other": 0}
+            total_count_by_type = {"rebound": 0, "turnover": 0, "oppo_made_shot": 0, "oppo_made_ft": 0, "other": 0}
             above_exp_count = 0
             below_exp_count = 0
             
@@ -174,7 +174,7 @@ def build_tempo_figure(
     if "poss_start_type" in tfs_df.columns:
         # Group by poss_start_type and plot each group with different color
         # Don't add labels to main legend - they'll be in separate legend
-        poss_start_types = ["rebound", "turnover", "oppo_made_shot", "period_start", None]
+        poss_start_types = ["rebound", "turnover", "oppo_made_shot", "oppo_made_ft", None]
         
         for poss_type in poss_start_types:
             mask = tfs_df["poss_start_type"] == poss_type
@@ -359,7 +359,7 @@ def build_tempo_figure(
             "rebound": "Reb",
             "turnover": "TO",
             "oppo_made_shot": "Made",
-            "period_start": "Start",
+            "oppo_made_ft": "FT",
             "other": "Other"
         }
         
@@ -367,7 +367,7 @@ def build_tempo_figure(
         
         # Add by-type residuals
         type_parts = []
-        for poss_type in ["rebound", "turnover", "oppo_made_shot", "period_start"]:
+        for poss_type in ["rebound", "turnover", "oppo_made_shot", "oppo_made_ft"]:
             if poss_type in residual_data['avg_by_type']:
                 type_parts.append(f"{type_labels[poss_type]}: {residual_data['avg_by_type'][poss_type]:+.1f}s")
         if type_parts:
@@ -392,11 +392,12 @@ def build_tempo_figure(
         # Prepare data for table with 5 columns: Metric, Count, Mean Res, Median Res, % Slower
         type_labels_display = {
             "oppo_made_shot": "Made Shot",
+            "oppo_made_ft": "Made FT",
             "rebound": "Rebound",
             "turnover": "Turnover"
         }
         
-        # Build table data: rows are Overall, Made Shot, Rebound, Turnover
+        # Build table data: rows are Overall, Made Shot, Made FT, Rebound, Turnover
         table_data = []
         
         # Overall row
@@ -408,8 +409,8 @@ def build_tempo_figure(
             f"{residual_data['pct_above']:.1f}%"
         ])
         
-        # Add possession type rows (Made Shot, Rebound, Turnover)
-        for poss_type in ["oppo_made_shot", "rebound", "turnover"]:
+        # Add possession type rows (Made Shot, Made FT, Rebound, Turnover)
+        for poss_type in ["oppo_made_shot", "oppo_made_ft", "rebound", "turnover"]:
             if poss_type in residual_data['avg_by_type']:
                 count = residual_data['count_by_type'].get(poss_type, 0)
                 avg_res = residual_data['avg_by_type'][poss_type]

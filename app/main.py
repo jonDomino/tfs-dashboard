@@ -370,8 +370,6 @@ def render():
 
 def _render_content():
     """Internal render function with actual content."""
-    st.title("Live TFS Kernel Dashboard")
-    
     # Load schedule
     try:
         sched = load_schedule()
@@ -394,7 +392,7 @@ def _render_content():
         ("Rebound", "rebound", "#d62728"),
         ("Turnover", "turnover", "#1f77b4"),
         ("Opp Made Shot", "oppo_made_shot", "#2ca02c"),
-        ("Period Start", "period_start", "#9467bd"),
+        ("Opp Made FT", "oppo_made_ft", "#ff7f0e"),
     ]
     
     for label, poss_type, color in poss_start_info:

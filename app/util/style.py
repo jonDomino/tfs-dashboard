@@ -20,7 +20,7 @@ POSS_START_COLORS = {
     "rebound": "#d62728",        # Red
     "turnover": "#1f77b4",       # Blue
     "oppo_made_shot": "#2ca02c", # Green
-    "period_start": "#9467bd",   # Purple
+    "oppo_made_ft": "#ff7f0e",   # Orange
     None: "#7f7f7f",             # Gray for edge cases
 }
 
@@ -62,7 +62,7 @@ def get_poss_start_color(poss_start_type) -> str:
     """Get color for possession start type.
     
     Args:
-        poss_start_type: Possession start type (rebound, turnover, oppo_made_shot, period_start, None)
+        poss_start_type: Possession start type (rebound, turnover, oppo_made_shot, oppo_made_ft, None)
         
     Returns:
         Hex color string

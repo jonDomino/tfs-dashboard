@@ -4,7 +4,8 @@ add_poss_start_type.py
 Adds possession start type field that tracks how each possession started:
 - rebound: Previous possession ended with defensive/dead ball rebound
 - turnover: Previous possession contained a turnover
-- oppo_made_shot: Previous possession ended with made shot (FG or final FT)
+- oppo_made_ft: Previous possession ended with made final free throw
+- oppo_made_shot: Previous possession ended with made field goal
 - period_start: First possession of period/game
 - None: Edge cases
 """
@@ -76,22 +77,20 @@ def add_poss_start_type(df: pd.DataFrame) -> pd.DataFrame:
                 df.loc[poss_mask, "poss_start_type"] = "turnover"
                 continue
             
-            # 3. Opponent Made Shot: Previous ended with made shot
-            # Check if last action was a scoring play (field goal made)
+            # 3. Opponent Made Free Throw: Previous ended with made final FT
+            # Check if last action was a final free throw that transfers possession
+            # This is different from made shots because clock stops after FTs
+            if last_action.get("final_ft", False) and last_action.get("scoring_play", False):
+                df.loc[poss_mask, "poss_start_type"] = "oppo_made_ft"
+                continue
+            
+            # 4. Opponent Made Shot: Previous ended with made field goal
+            # Check if last action was a scoring play (field goal made, score_value > 1)
             if last_action.get("scoring_play", False) and last_action.get("score_value", 0) > 1:
                 df.loc[poss_mask, "poss_start_type"] = "oppo_made_shot"
                 continue
             
-            # Check if last action was final free throw that transfers possession
-            # (final_ft flag indicates this is the last FT in a sequence that transfers possession)
-            # Note: final_ft alone doesn't guarantee possession transfer, but if it's scoring, it does
-            if last_action.get("final_ft", False):
-                # Check if this FT transfers possession (typically the last FT in a sequence)
-                # We'll treat final_ft as a made shot that transfers possession
-                df.loc[poss_mask, "poss_start_type"] = "oppo_made_shot"
-                continue
-            
-            # 4. None: Edge cases
+            # 5. None: Edge cases
             df.loc[poss_mask, "poss_start_type"] = None
     
     return df

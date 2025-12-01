@@ -48,10 +48,14 @@ def _determine_pre_post(row):
         post = opponent if scoring else team
     elif t == "MadeFreeThrow":
         if not final_ft:
+            # Non-final FT: same team keeps ball for next FT
             post = team
         elif scoring:
+            # Final FT (scoring): opponent gets ball
             post = opponent
         else:
+            # Final FT (non-scoring/missed): treat same as missed shot
+            # Keep possession with shooting team; rebound will determine actual possession
             post = team
     elif t == "Lost Ball Turnover":
         post = opponent
