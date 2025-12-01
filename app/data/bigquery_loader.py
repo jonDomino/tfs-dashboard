@@ -216,21 +216,37 @@ def get_closing_totals(game_ids: list) -> Dict[str, Tuple[float, str, Optional[i
     return _get_closing_totals_internal(game_ids)
 
 
-def calculate_expected_tfs(closing_total: float, poss_start_type: Optional[str] = None) -> float:
-    """Calculate expected TFS from closing total and possession start type.
+def calculate_expected_tfs(
+    closing_total: float, 
+    poss_start_type: Optional[str] = None,
+    period_number: Optional[int] = None,
+    score_diff: Optional[float] = None
+) -> float:
+    """Calculate expected TFS from closing total, possession start type, period, and score differential.
     
-    If poss_start_type is provided, uses possession-specific formulas (updated with cleaned TFS data):
-    - OPPO_MADE_SHOT: 34.4101 + -0.0978 * closing_total
-    - OPPO_MADE_FT: 36.4397 + -0.1025 * closing_total (clock stops after FTs, typically shorter TFS)
-    - REBOUND: 23.2104 + -0.0703 * closing_total
-    - TURNOVER: 23.4546 + -0.0690 * closing_total
+    Uses period-specific formulas:
     
-    Otherwise, uses the old game-level formula (for backward compatibility):
-    - exp_tfs = 27.65 - 0.08 * closing_total
+    Period 1 formulas:
+    - turnover: TFS = 23.4283 + -0.068865 * closing_total
+    - rebound: TFS = 23.2206 + -0.070364 * closing_total
+    - oppo_made_shot: TFS = 35.8503 + -0.105015 * closing_total
+    - oppo_made_ft: TFS = 28.1118 + -0.065201 * closing_total
+    
+    Period 2 formulas (require score_diff):
+    - turnover: TFS = 21.7170 + -0.055586 * closing_total + -0.060522 * score_diff
+    - rebound: TFS = 24.5006 + -0.073008 * closing_total + -0.052952 * score_diff
+    - oppo_made_shot: TFS = 33.5933 + -0.089827 * closing_total + -0.031034 * score_diff
+    - oppo_made_ft: TFS = 25.9001 + -0.059410 * closing_total + 0.035455 * score_diff
+    
+    If period_number is not provided or is 1, uses Period 1 formulas.
+    If period_number is 2 or greater and score_diff is provided, uses Period 2 formulas.
+    Otherwise falls back to Period 1 formulas.
     
     Args:
         closing_total: Closing total from betting market (will be converted to float)
         poss_start_type: Possession start type (optional)
+        period_number: Period number (1, 2, etc.) - optional, defaults to Period 1
+        score_diff: Score differential at end of Period 1 (abs(away_score - home_score)) - optional, required for Period 2
         
     Returns:
         Expected TFS value
@@ -238,23 +254,42 @@ def calculate_expected_tfs(closing_total: float, poss_start_type: Optional[str] 
     # Ensure closing_total is a float
     closing_total = float(closing_total)
     
+    # Determine which period formulas to use
+    # Default to Period 1 if period_number is None or 1
+    use_period_2 = (period_number is not None and period_number >= 2 and score_diff is not None)
+    
     # Use possession-specific formulas if poss_start_type is provided
     if poss_start_type:
         poss_start_type = str(poss_start_type).lower()
         
-        if poss_start_type == "oppo_made_shot":
-            return 34.4101 + (-0.0978 * closing_total)
-        elif poss_start_type == "oppo_made_ft":
-            # Formula for opponent made free throw (clock stops, typically shorter TFS)
-            # Note: This formula may need calibration with cleaned TFS data
-            return 36.4397 + (-0.1025 * closing_total)
-        elif poss_start_type == "rebound":
-            return 23.2104 + (-0.0703 * closing_total)
-        elif poss_start_type == "turnover":
-            return 23.4546 + (-0.0690 * closing_total)
+        if use_period_2:
+            # Period 2 formulas (with score_diff)
+            score_diff = float(score_diff)
+            
+            if poss_start_type == "turnover":
+                return 21.7170 + (-0.055586 * closing_total) + (-0.060522 * score_diff)
+            elif poss_start_type == "rebound":
+                return 24.5006 + (-0.073008 * closing_total) + (-0.052952 * score_diff)
+            elif poss_start_type == "oppo_made_shot":
+                return 33.5933 + (-0.089827 * closing_total) + (-0.031034 * score_diff)
+            elif poss_start_type == "oppo_made_ft":
+                return 25.9001 + (-0.059410 * closing_total) + (0.035455 * score_diff)
+            else:
+                # Unknown type, use rebound formula as default
+                return 24.5006 + (-0.073008 * closing_total) + (-0.052952 * score_diff)
         else:
-            # Unknown type (including period_start), use rebound formula as default
-            return 23.2104 + (-0.0703 * closing_total)
+            # Period 1 formulas
+            if poss_start_type == "turnover":
+                return 23.4283 + (-0.068865 * closing_total)
+            elif poss_start_type == "rebound":
+                return 23.2206 + (-0.070364 * closing_total)
+            elif poss_start_type == "oppo_made_shot":
+                return 35.8503 + (-0.105015 * closing_total)
+            elif poss_start_type == "oppo_made_ft":
+                return 28.1118 + (-0.065201 * closing_total)
+            else:
+                # Unknown type, use rebound formula as default
+                return 23.2206 + (-0.070364 * closing_total)
     
     # Fallback to old game-level formula if no poss_start_type
     return 27.65 - 0.08 * closing_total

@@ -80,6 +80,17 @@ def build_tempo_figure(
     # Get style
     style = get_plot_style()
     
+    # Calculate score_diff from Period 1 scores (if available)
+    score_diff = None
+    if "away_score" in tfs_df.columns and "home_score" in tfs_df.columns and "period_number" in tfs_df.columns:
+        period_1_data = tfs_df[tfs_df["period_number"] == 1]
+        if len(period_1_data) > 0:
+            # Get max scores from period 1
+            max_away_score = period_1_data["away_score"].max()
+            max_home_score = period_1_data["home_score"].max()
+            if pd.notna(max_away_score) and pd.notna(max_home_score):
+                score_diff = abs(float(max_away_score) - float(max_home_score))
+    
     # Calculate residuals early if we have closing_total (needed for subplot)
     residual_data = None
     if closing_total is not None and len(tfs_df) > 0:
@@ -97,12 +108,17 @@ def build_tempo_figure(
             for idx in range(len(tfs_df)):
                 actual_tfs = float(tfs_df.iloc[idx]["action_time"])
                 poss_type = None
+                period_num = None
                 if "poss_start_type" in tfs_df.columns:
                     poss_type_val = tfs_df.iloc[idx]["poss_start_type"]
                     if pd.notna(poss_type_val) and poss_type_val is not None:
                         poss_type = str(poss_type_val).lower()
+                if "period_number" in tfs_df.columns:
+                    period_num_val = tfs_df.iloc[idx]["period_number"]
+                    if pd.notna(period_num_val):
+                        period_num = int(period_num_val)
                 
-                expected_tfs = calculate_expected_tfs(float(closing_total), poss_type)
+                expected_tfs = calculate_expected_tfs(float(closing_total), poss_type, period_num, score_diff)
                 residual = actual_tfs - expected_tfs
                 residuals.append(residual)
                 
@@ -250,17 +266,22 @@ def build_tempo_figure(
     exp_gx, exp_gy = None, None
     if closing_total is not None and len(tfs_df) > 0:
         try:
-            # Calculate expected TFS for each possession based on its poss_start_type
+            # Calculate expected TFS for each possession based on its poss_start_type and period
             # Make sure we iterate in the same order as the DataFrame (which matches chrono_index)
             exp_tfs_values = []
             for idx in range(len(tfs_df)):
                 poss_type = None
+                period_num = None
                 if "poss_start_type" in tfs_df.columns:
                     poss_type_val = tfs_df.iloc[idx]["poss_start_type"]
                     # Handle NaN/None values
                     if pd.notna(poss_type_val) and poss_type_val is not None:
                         poss_type = str(poss_type_val).lower()
-                exp_tfs = calculate_expected_tfs(float(closing_total), poss_type)
+                if "period_number" in tfs_df.columns:
+                    period_num_val = tfs_df.iloc[idx]["period_number"]
+                    if pd.notna(period_num_val):
+                        period_num = int(period_num_val)
+                exp_tfs = calculate_expected_tfs(float(closing_total), poss_type, period_num, score_diff)
                 exp_tfs_values.append(exp_tfs)
             
             exp_tfs_array = np.array(exp_tfs_values)
