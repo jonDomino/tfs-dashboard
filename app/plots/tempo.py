@@ -494,10 +494,19 @@ def build_tempo_figure(
                 final_away = away_scores[-1]
                 final_home = home_scores[-1]
                 
-                # Build compact text: "Away: H1 30 H2 45 FNL 75" on first line, "Home: H1 28 H2 42 FNL 70" on second
+                # Build compact text with aligned columns
+                # Find max team name length for alignment
+                max_team_len = max(len(away_team_name), len(home_team_name))
+                
+                # Build score strings with aligned columns
+                # Format: "Team Name: H1 30 H2 45 FNL 75" with fixed-width team name
+                away_score_str = " ".join([f"{label} {score:>3}" for label, score in zip(period_labels, away_scores)]) + f" FNL {final_away:>3}"
+                home_score_str = " ".join([f"{label} {score:>3}" for label, score in zip(period_labels, home_scores)]) + f" FNL {final_home:>3}"
+                
+                # Format with aligned team names
                 score_parts = []
-                score_parts.append(f"{away_team_name}: " + " ".join([f"{label} {score}" for label, score in zip(period_labels, away_scores)]) + f" FNL {final_away}")
-                score_parts.append(f"{home_team_name}: " + " ".join([f"{label} {score}" for label, score in zip(period_labels, home_scores)]) + f" FNL {final_home}")
+                score_parts.append(f"{away_team_name:<{max_team_len}}: {away_score_str}")
+                score_parts.append(f"{home_team_name:<{max_team_len}}: {home_score_str}")
                 score_text = "\n".join(score_parts)
                 
                 # Position below eFG if eFG is present, otherwise at top
