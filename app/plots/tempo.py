@@ -631,41 +631,9 @@ def build_tempo_figure(
             # Column 0: Metric column (light gray)
             table[(row_idx, 0)].set_facecolor('#F0F0F0')
             
-            # Column 1: Count column (white/neutral)
-            table[(row_idx, 1)].set_facecolor('#FFFFFF')
-            
-            # Column 2: Mean Res - positive=red, negative=green
-            try:
-                val_str = row[2].replace('s', '')
-                val = float(val_str)
-                if val < 0:
-                    table[(row_idx, 2)].set_facecolor('#90EE90')  # Light green for negative (faster)
-                else:
-                    table[(row_idx, 2)].set_facecolor('#FFB6C1')  # Light pink/red for positive (slower)
-            except:
-                table[(row_idx, 2)].set_facecolor('#FFFFFF')  # White if can't parse
-            
-            # Column 3: Median Res - positive=red, negative=green
-            try:
-                val_str = row[3].replace('s', '')
-                val = float(val_str)
-                if val < 0:
-                    table[(row_idx, 3)].set_facecolor('#90EE90')  # Light green for negative (faster)
-                else:
-                    table[(row_idx, 3)].set_facecolor('#FFB6C1')  # Light pink/red for positive (slower)
-            except:
-                table[(row_idx, 3)].set_facecolor('#FFFFFF')  # White if can't parse
-            
-            # Column 4: % Slower - >50%=red, <=50%=green
-            try:
-                pct_str = row[4].replace('%', '')
-                pct_val = float(pct_str)
-                if pct_val > 50:
-                    table[(row_idx, 4)].set_facecolor('#FFB6C1')  # Light pink/red for >50%
-                else:
-                    table[(row_idx, 4)].set_facecolor('#90EE90')  # Light green for <=50%
-            except:
-                table[(row_idx, 4)].set_facecolor('#FFFFFF')  # White if can't parse
+            # Count columns (1, 2, 3) - white background
+            for col_idx in [1, 2, 3]:
+                table[(row_idx, col_idx)].set_facecolor('#FFFFFF')
         
         # Remove axes for table
         ax_residual.axis('off')
