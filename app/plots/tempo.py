@@ -471,7 +471,7 @@ def build_tempo_figure(
             
             # Get max scores for each period (represents score at end of period)
             periods = sorted(tfs_df["period_number"].unique())
-            score_data = []
+            period_scores = {}  # Store cumulative scores by period
             
             for period in periods:
                 period_data = tfs_df[tfs_df["period_number"] == period]
@@ -479,41 +479,62 @@ def build_tempo_figure(
                     away_score = period_data["away_score"].max()
                     home_score = period_data["home_score"].max()
                     if pd.notna(away_score) and pd.notna(home_score):
-                        score_data.append({
-                            "period": period,
+                        period_scores[period] = {
                             "away_score": int(away_score),
                             "home_score": int(home_score)
-                        })
+                        }
             
-            if score_data:
+            if period_scores:
                 # Build compact score string
                 period_labels = []
                 away_scores = []
                 home_scores = []
                 
-                for score_row in score_data:
-                    period = score_row["period"]
-                    if period == 1:
-                        period_labels.append("H1")
-                    elif period == 2:
-                        period_labels.append("H2")
-                    elif period > 2:
-                        period_labels.append(f"OT{period - 2}")
-                    else:
-                        period_labels.append(f"P{period}")
-                    away_scores.append(str(score_row["away_score"]))
-                    home_scores.append(str(score_row["home_score"]))
+                # H1: cumulative score at end of period 1
+                if 1 in period_scores:
+                    period_labels.append("H1")
+                    away_scores.append(str(period_scores[1]["away_score"]))
+                    home_scores.append(str(period_scores[1]["home_score"]))
+                    prev_away = period_scores[1]["away_score"]
+                    prev_home = period_scores[1]["home_score"]
+                else:
+                    prev_away = 0
+                    prev_home = 0
                 
-                # Final score (last period's score)
-                final_away = away_scores[-1]
-                final_home = home_scores[-1]
+                # H2: points scored in period 2
+                if 2 in period_scores:
+                    period_labels.append("H2")
+                    h2_away = period_scores[2]["away_score"] - prev_away
+                    h2_home = period_scores[2]["home_score"] - prev_home
+                    away_scores.append(str(h2_away))
+                    home_scores.append(str(h2_home))
+                    prev_away = period_scores[2]["away_score"]
+                    prev_home = period_scores[2]["home_score"]
+                
+                # OTs: points scored in each OT period
+                ot_num = 1
+                for period in sorted(period_scores.keys()):
+                    if period > 2:
+                        period_labels.append(f"OT{ot_num}")
+                        ot_away = period_scores[period]["away_score"] - prev_away
+                        ot_home = period_scores[period]["home_score"] - prev_home
+                        away_scores.append(str(ot_away))
+                        home_scores.append(str(ot_home))
+                        prev_away = period_scores[period]["away_score"]
+                        prev_home = period_scores[period]["home_score"]
+                        ot_num += 1
+                
+                # Final score (last period's cumulative score)
+                final_period = max(period_scores.keys())
+                final_away = period_scores[final_period]["away_score"]
+                final_home = period_scores[final_period]["home_score"]
                 
                 # Build compact text with aligned columns
                 # Find max team name length for alignment
                 max_team_len = max(len(away_team_name), len(home_team_name))
                 
                 # Build score strings with aligned columns
-                # Format: "Team Name: H1 30 H2 45 FNL 75" with fixed-width team name
+                # Format: "Team Name: H1 30 H2 15 OT1 5 FNL 50" with fixed-width team name
                 away_score_str = " ".join([f"{label} {score:>3}" for label, score in zip(period_labels, away_scores)]) + f" FNL {final_away:>3}"
                 home_score_str = " ".join([f"{label} {score:>3}" for label, score in zip(period_labels, home_scores)]) + f" FNL {final_home:>3}"
                 
