@@ -767,70 +767,59 @@ def build_tempo_figure(
             transform=fig.transFigure  # Use figure coordinates
         )
     
-    # Create simple table in top-right
+    # Create simple formatted text in top-right
     if closing_total is not None:
-        # Build table rows
-        rows = []
+        y_start = 0.98
+        line_height = 0.025
+        x_left = 0.70
+        x_mid = 0.85
+        x_right = 0.98
+        
+        # Header
+        fig.text(x_left, y_start, '', fontsize=9, ha='left', va='top', transform=fig.transFigure)
+        fig.text(x_mid, y_start, '2H Open', fontsize=9, ha='center', va='top', transform=fig.transFigure, weight='bold')
+        fig.text(x_right, y_start, '2H Close', fontsize=9, ha='center', va='top', transform=fig.transFigure, weight='bold')
+        y_start -= line_height * 1.5
         
         # Row 1: Total
-        rows.append([f"Total: {closing_total:.1f}", '', ''])
+        fig.text(x_left, y_start, f"Total: {closing_total:.1f}", fontsize=9, ha='left', va='top', transform=fig.transFigure)
+        y_start -= line_height
         
         # Row 2: 2H Looka
         if lookahead_2h_total is not None:
-            looka_open = f"{opening_2h_total:.1f}" if opening_2h_total is not None else ''
-            looka_close = f"{closing_2h_total:.1f}" if closing_2h_total is not None else ''
-            if looka_open.endswith('.0'):
-                looka_open = looka_open[:-2]
-            if looka_close.endswith('.0'):
-                looka_close = looka_close[:-2]
-            rows.append([f"2H Looka: {lookahead_2h_total:.1f}", looka_open, looka_close])
+            looka_open = ''
+            looka_close = ''
+            if opening_2h_total is not None:
+                looka_open = f"{opening_2h_total:.1f}"
+                if looka_open.endswith('.0'):
+                    looka_open = looka_open[:-2]
+            if closing_2h_total is not None:
+                looka_close = f"{closing_2h_total:.1f}"
+                if looka_close.endswith('.0'):
+                    looka_close = looka_close[:-2]
+            fig.text(x_left, y_start, f"2H Looka: {lookahead_2h_total:.1f}", fontsize=9, ha='left', va='top', transform=fig.transFigure)
+            fig.text(x_mid, y_start, looka_open, fontsize=9, ha='center', va='top', transform=fig.transFigure)
+            fig.text(x_right, y_start, looka_close, fontsize=9, ha='center', va='top', transform=fig.transFigure)
+            y_start -= line_height
         
         # Row 3: Home team spread
         if closing_spread_home is not None and home_team_name:
             spread_str = f"{closing_spread_home:.1f}"
             if spread_str.endswith('.0'):
                 spread_str = spread_str[:-2]
-            spread_open = f"{opening_2h_spread:.1f}" if opening_2h_spread is not None else ''
-            spread_close = f"{closing_2h_spread:.1f}" if closing_2h_spread is not None else ''
-            if spread_open.endswith('.0'):
-                spread_open = spread_open[:-2]
-            if spread_close.endswith('.0'):
-                spread_close = spread_close[:-2]
-            rows.append([f"{home_team_name}: {spread_str}", spread_open, spread_close])
-        
-        # Create table
-        if rows:
-            table_ax = fig.add_axes([0.65, 0.88, 0.33, 0.12])
-            table_ax.axis('off')
-            
-            table = table_ax.table(
-                cellText=rows,
-                colLabels=['', '2H Open', '2H Close'],
-                cellLoc='left',
-                loc='upper right',
-                bbox=[0, 0, 1, 1]
-            )
-            
-            table.set_fontsize(9)
-            table.scale(1, 2.5)
-            
-            # Simple styling
-            for i in range(3):
-                # Header
-                table[(0, i)].set_facecolor('#f0f0f0')
-                table[(0, i)].set_text_props(weight='bold', fontsize=9)
-                table[(0, i)].set_edgecolor('#888888')
-                table[(0, i)].set_linewidth(1)
-            
-            # Data cells
-            for i in range(len(rows)):
-                for j in range(3):
-                    table[(i + 1, j)].set_facecolor('white')
-                    table[(i + 1, j)].set_edgecolor('#dddddd')
-                    table[(i + 1, j)].set_linewidth(0.5)
-                    table[(i + 1, j)].set_text_props(fontsize=9)
-                    if j > 0:
-                        table[(i + 1, j)].set_text_props(ha='right')
+            spread_open = ''
+            spread_close = ''
+            if opening_2h_spread is not None:
+                spread_open = f"{opening_2h_spread:.1f}"
+                if spread_open.endswith('.0'):
+                    spread_open = spread_open[:-2]
+            if closing_2h_spread is not None:
+                spread_close = f"{closing_2h_spread:.1f}"
+                if spread_close.endswith('.0'):
+                    spread_close = spread_close[:-2]
+            fig.text(x_left, y_start, f"{home_team_name}: {spread_str}", fontsize=9, ha='left', va='top', transform=fig.transFigure)
+            fig.text(x_mid, y_start, spread_open, fontsize=9, ha='center', va='top', transform=fig.transFigure)
+            fig.text(x_right, y_start, spread_close, fontsize=9, ha='center', va='top', transform=fig.transFigure)
     
     fig.tight_layout()
     return fig
