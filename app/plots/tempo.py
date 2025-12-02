@@ -767,7 +767,7 @@ def build_tempo_figure(
             transform=fig.transFigure  # Use figure coordinates
         )
     
-    # Create table in top-right above plot
+    # Create simple text table in top-right above plot
     if closing_total is not None:
         # Prepare table data
         table_data = []
@@ -805,13 +805,13 @@ def build_tempo_figure(
                 spread_row[2] = spread_val
             table_data.append(spread_row)
         
-        # Create table using matplotlib
+        # Create simple table using matplotlib
         if table_data:
             # Position table in top-right
-            table_ax = fig.add_axes([0.70, 0.92, 0.28, 0.08])  # [left, bottom, width, height] in figure coordinates
+            table_ax = fig.add_axes([0.70, 0.92, 0.28, 0.08])
             table_ax.axis('off')
             
-            # Create table
+            # Create table with simple styling
             table = table_ax.table(
                 cellText=table_data,
                 colLabels=table_cols,
@@ -820,27 +820,31 @@ def build_tempo_figure(
                 bbox=[0, 0, 1, 1]
             )
             
-            # Style the table
+            # Simple styling
             table.auto_set_font_size(False)
-            table.set_fontsize(8)
-            table.scale(1, 1.5)
+            table.set_fontsize(9)
+            table.scale(1, 2)
             
-            # Style header row
+            # Basic cell styling
             for i in range(len(table_cols)):
+                # Header row
                 cell = table[(0, i)]
-                cell.set_facecolor('#f0f0f0')
-                cell.set_text_props(weight='bold', fontsize=8)
+                cell.set_facecolor('#f5f5f5')
+                cell.set_text_props(weight='bold', fontsize=9)
+                cell.set_edgecolor('#cccccc')
+                cell.set_linewidth(1)
             
-            # Style data cells - left align first column, right align others
+            # Data rows
             for i, row in enumerate(table_data):
                 for j in range(len(table_cols)):
                     cell = table[(i + 1, j)]
+                    cell.set_facecolor('white')
+                    cell.set_edgecolor('#cccccc')
+                    cell.set_linewidth(1)
                     if j == 0:
-                        cell.set_text_props(ha='left')
+                        cell.set_text_props(ha='left', fontsize=9)
                     else:
-                        cell.set_text_props(ha='right')
-                    cell.set_edgecolor('#d0d0d0')
-                    cell.set_linewidth(0.5)
+                        cell.set_text_props(ha='right', fontsize=9)
     
     fig.tight_layout()
     return fig
