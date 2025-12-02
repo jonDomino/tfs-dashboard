@@ -767,84 +767,70 @@ def build_tempo_figure(
             transform=fig.transFigure  # Use figure coordinates
         )
     
-    # Create simple text table in top-right above plot
+    # Create simple table in top-right
     if closing_total is not None:
-        # Prepare table data
-        table_data = []
-        table_cols = ['', '2H Open', '2H Close']
+        # Build table rows
+        rows = []
         
         # Row 1: Total
-        total_row = [f"Total: {closing_total:.1f}", '', '']
-        table_data.append(total_row)
+        rows.append([f"Total: {closing_total:.1f}", '', ''])
         
         # Row 2: 2H Looka
         if lookahead_2h_total is not None:
-            looka_row = [f"2H Looka: {lookahead_2h_total:.1f}", '', '']
-            if opening_2h_total is not None:
-                looka_row[1] = f"{opening_2h_total:.1f}"
-            if closing_2h_total is not None:
-                looka_row[2] = f"{closing_2h_total:.1f}"
-            table_data.append(looka_row)
+            looka_open = f"{opening_2h_total:.1f}" if opening_2h_total is not None else ''
+            looka_close = f"{closing_2h_total:.1f}" if closing_2h_total is not None else ''
+            if looka_open.endswith('.0'):
+                looka_open = looka_open[:-2]
+            if looka_close.endswith('.0'):
+                looka_close = looka_close[:-2]
+            rows.append([f"2H Looka: {lookahead_2h_total:.1f}", looka_open, looka_close])
         
         # Row 3: Home team spread
         if closing_spread_home is not None and home_team_name:
             spread_str = f"{closing_spread_home:.1f}"
-            # Remove trailing .0 if it's a whole number
             if spread_str.endswith('.0'):
                 spread_str = spread_str[:-2]
-            spread_row = [f"{home_team_name}: {spread_str}", '', '']
-            if opening_2h_spread is not None:
-                spread_val = f"{opening_2h_spread:.1f}"
-                if spread_val.endswith('.0'):
-                    spread_val = spread_val[:-2]
-                spread_row[1] = spread_val
-            if closing_2h_spread is not None:
-                spread_val = f"{closing_2h_spread:.1f}"
-                if spread_val.endswith('.0'):
-                    spread_val = spread_val[:-2]
-                spread_row[2] = spread_val
-            table_data.append(spread_row)
+            spread_open = f"{opening_2h_spread:.1f}" if opening_2h_spread is not None else ''
+            spread_close = f"{closing_2h_spread:.1f}" if closing_2h_spread is not None else ''
+            if spread_open.endswith('.0'):
+                spread_open = spread_open[:-2]
+            if spread_close.endswith('.0'):
+                spread_close = spread_close[:-2]
+            rows.append([f"{home_team_name}: {spread_str}", spread_open, spread_close])
         
-        # Create simple table using matplotlib
-        if table_data:
-            # Position table in top-right
-            table_ax = fig.add_axes([0.70, 0.92, 0.28, 0.08])
+        # Create table
+        if rows:
+            table_ax = fig.add_axes([0.65, 0.88, 0.33, 0.12])
             table_ax.axis('off')
             
-            # Create table with simple styling
             table = table_ax.table(
-                cellText=table_data,
-                colLabels=table_cols,
+                cellText=rows,
+                colLabels=['', '2H Open', '2H Close'],
                 cellLoc='left',
                 loc='upper right',
                 bbox=[0, 0, 1, 1]
             )
             
-            # Simple styling
-            table.auto_set_font_size(False)
             table.set_fontsize(9)
-            table.scale(1, 2)
+            table.scale(1, 2.5)
             
-            # Basic cell styling
-            for i in range(len(table_cols)):
-                # Header row
-                cell = table[(0, i)]
-                cell.set_facecolor('#f5f5f5')
-                cell.set_text_props(weight='bold', fontsize=9)
-                cell.set_edgecolor('#cccccc')
-                cell.set_linewidth(1)
+            # Simple styling
+            for i in range(3):
+                # Header
+                table[(0, i)].set_facecolor('#f0f0f0')
+                table[(0, i)].set_text_props(weight='bold', fontsize=9)
+                table[(0, i)].set_edgecolor('#888888')
+                table[(0, i)].set_linewidth(1)
             
-            # Data rows
-            for i, row in enumerate(table_data):
-                for j in range(len(table_cols)):
-                    cell = table[(i + 1, j)]
-                    cell.set_facecolor('white')
-                    cell.set_edgecolor('#cccccc')
-                    cell.set_linewidth(1)
-                    if j == 0:
-                        cell.set_text_props(ha='left', fontsize=9)
-                    else:
-                        cell.set_text_props(ha='right', fontsize=9)
+            # Data cells
+            for i in range(len(rows)):
+                for j in range(3):
+                    table[(i + 1, j)].set_facecolor('white')
+                    table[(i + 1, j)].set_edgecolor('#dddddd')
+                    table[(i + 1, j)].set_linewidth(0.5)
+                    table[(i + 1, j)].set_text_props(fontsize=9)
+                    if j > 0:
+                        table[(i + 1, j)].set_text_props(ha='right')
     
     fig.tight_layout()
     return fig
