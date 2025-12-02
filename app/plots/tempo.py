@@ -759,17 +759,17 @@ def build_tempo_figure(
             transform=fig.transFigure  # Use figure coordinates
         )
     
-    # Add closing total, lookahead 2H total, and spread below rotation number
-    y_pos = 0.95  # Start position below rotation number
+    # Add closing total, lookahead 2H total, and spread in top-right above plot
+    y_pos = 0.98  # Start position at top-right
     line_height = 0.025  # Vertical spacing between lines
     
     if closing_total is not None:
         fig.text(
-            0.02, y_pos,
+            0.98, y_pos,
             f"Total: {closing_total:.1f}",
             fontsize=9,
             color='#0a0a0a',
-            horizontalalignment='left',
+            horizontalalignment='right',
             verticalalignment='top',
             transform=fig.transFigure
         )
@@ -777,11 +777,11 @@ def build_tempo_figure(
     
     if lookahead_2h_total is not None:
         fig.text(
-            0.02, y_pos,
+            0.98, y_pos,
             f"2H Looka: {lookahead_2h_total:.1f}",
             fontsize=9,
             color='#0a0a0a',
-            horizontalalignment='left',
+            horizontalalignment='right',
             verticalalignment='top',
             transform=fig.transFigure
         )
@@ -794,11 +794,11 @@ def build_tempo_figure(
         if spread_str.endswith('.0'):
             spread_str = spread_str[:-2]
         fig.text(
-            0.02, y_pos,
+            0.98, y_pos,
             f"{home_team_name}: {spread_str}",
             fontsize=9,
             color='#0a0a0a',
-            horizontalalignment='left',
+            horizontalalignment='right',
             verticalalignment='top',
             transform=fig.transFigure
         )
