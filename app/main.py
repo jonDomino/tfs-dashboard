@@ -290,7 +290,11 @@ def render_game(
     rotation_number: Optional[int] = None,
     lookahead_2h_total: Optional[float] = None,
     closing_spread_home: Optional[float] = None,
-    home_team_name: Optional[str] = None
+    home_team_name: Optional[str] = None,
+    opening_2h_total: Optional[float] = None,
+    closing_2h_total: Optional[float] = None,
+    opening_2h_spread: Optional[float] = None,
+    closing_2h_spread: Optional[float] = None
 ):
     """Render a single game's visualization.
     
@@ -301,6 +305,10 @@ def render_game(
         lookahead_2h_total: Lookahead 2H total (optional)
         closing_spread_home: Closing spread from home team's perspective (optional)
         home_team_name: Home team name (optional)
+        opening_2h_total: Opening 2H total (optional)
+        closing_2h_total: Closing 2H total (optional)
+        opening_2h_spread: Opening 2H spread (optional)
+        closing_2h_spread: Closing 2H spread (optional)
     """
     st.markdown(f"**Game {game_id}**")
     
@@ -455,11 +463,15 @@ def _render_content():
     lookahead_2h_totals = {}
     closing_spread_home = {}
     home_team_names = {}  # Store home team names for spread display
+    opening_2h_totals = {}
+    closing_2h_totals = {}
+    opening_2h_spreads = {}
+    closing_2h_spreads = {}
     if closing_totals_raw:
         for gid in game_ids:
             if gid in closing_totals_raw:
                 try:
-                    closing_total, board, rotation_number, closing_1h_total, lookahead_2h_total, spread_home, home_team_name = closing_totals_raw[gid]
+                    closing_total, board, rotation_number, closing_1h_total, lookahead_2h_total, spread_home, home_team_name, opening_2h_total, closing_2h_total, opening_2h_spread, closing_2h_spread = closing_totals_raw[gid]
                     # Ensure closing_total is a float
                     closing_total = float(closing_total)
                     # Only include if board matches filter
@@ -473,6 +485,14 @@ def _render_content():
                             closing_spread_home[gid] = float(spread_home)
                         if home_team_name:
                             home_team_names[gid] = home_team_name
+                        if opening_2h_total is not None:
+                            opening_2h_totals[gid] = float(opening_2h_total)
+                        if closing_2h_total is not None:
+                            closing_2h_totals[gid] = float(closing_2h_total)
+                        if opening_2h_spread is not None:
+                            opening_2h_spreads[gid] = float(opening_2h_spread)
+                        if closing_2h_spread is not None:
+                            closing_2h_spreads[gid] = float(closing_2h_spread)
                 except Exception as e:
                     print(f"ERROR unpacking data for game {gid}: {e}")
                     import traceback
@@ -587,13 +607,21 @@ def _render_content():
                                 lookahead_2h = lookahead_2h_totals.get(gid)
                                 spread_home = closing_spread_home.get(gid)
                                 home_name = home_team_names.get(gid)
+                                opening_2h_t = opening_2h_totals.get(gid)
+                                closing_2h_t = closing_2h_totals.get(gid)
+                                opening_2h_s = opening_2h_spreads.get(gid)
+                                closing_2h_s = closing_2h_spreads.get(gid)
                                 render_game(
                                     gid, 
                                     closing_totals=closing_totals, 
                                     rotation_number=rotation_number,
                                     lookahead_2h_total=lookahead_2h,
                                     closing_spread_home=spread_home,
-                                    home_team_name=home_name
+                                    home_team_name=home_name,
+                                    opening_2h_total=opening_2h_t,
+                                    closing_2h_total=closing_2h_t,
+                                    opening_2h_spread=opening_2h_s,
+                                    closing_2h_spread=closing_2h_s
                                 )
                         except Exception as e:
                             # Log error but don't crash the whole dashboard

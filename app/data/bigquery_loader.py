@@ -36,7 +36,7 @@ def should_run_query() -> bool:
 
 
 @st.cache_data(ttl=config.CACHE_TTL_CLOSING_TOTALS)  # Cache for configured duration (closing totals don't change often)
-def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str, Optional[int], Optional[float], Optional[float], Optional[float], Optional[str]]]:
+def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str, Optional[int], Optional[float], Optional[float], Optional[float], Optional[str], Optional[float], Optional[float], Optional[float], Optional[float]]]:
     """Internal function to fetch closing totals from BigQuery.
     
     This is cached for 1 hour. The wrapper function handles time restrictions.
@@ -45,7 +45,7 @@ def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str, 
         game_ids: List of game ID strings
         
     Returns:
-        Dictionary mapping game_id to (closing_total, board, rotation_number, closing_1h_total, lookahead_2h_total, closing_spread_home, home_team_name)
+        Dictionary mapping game_id to (closing_total, board, rotation_number, closing_1h_total, lookahead_2h_total, closing_spread_home, home_team_name, opening_2h_total, closing_2h_total, opening_2h_spread, closing_2h_spread)
     """
     
     # Load credentials - try multiple methods
@@ -130,6 +130,13 @@ def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str, 
           SELECT *
           FROM `meatloaf-427522.markets.first_half`
           WHERE book IN ('Unabated', 'Bookmaker')
+            AND DATE(modifiedOn) >= DATE_SUB(CURRENT_DATE(), INTERVAL 2 DAY)
+        ),
+        
+        last_two_days_2h AS (
+          SELECT *
+          FROM `meatloaf-427522.markets.second_half`
+          WHERE book IN ('Circa', 'Bookmaker', 'Buckeye')
             AND DATE(modifiedOn) >= DATE_SUB(CURRENT_DATE(), INTERVAL 2 DAY)
         ),
         
@@ -225,6 +232,86 @@ def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str, 
         ),
         
         -- ============================================================
+        -- SECOND HALF TOTALS (Circa → Bookmaker → Buckeye)
+        -- ============================================================
+        second_half_totals_ranked AS (
+          SELECT
+            eventId,
+            book,
+            points AS total_points,
+            modifiedOn,
+            ROW_NUMBER() OVER (
+              PARTITION BY eventId, book
+              ORDER BY modifiedOn ASC
+            ) AS rn_open,
+            ROW_NUMBER() OVER (
+              PARTITION BY eventId, book
+              ORDER BY modifiedOn DESC
+            ) AS rn_close
+          FROM last_two_days_2h
+          WHERE betType = 3 AND market = 'total'
+        ),
+        
+        second_half_totals AS (
+          SELECT
+            eventId,
+            -- Opening 2H Total
+            COALESCE(
+              MAX(IF(book = 'Circa'     AND rn_open = 1, total_points, NULL)),
+              MAX(IF(book = 'Bookmaker' AND rn_open = 1, total_points, NULL)),
+              MAX(IF(book = 'Buckeye'   AND rn_open = 1, total_points, NULL))
+            ) AS opening_2h_total,
+            -- Closing 2H Total
+            COALESCE(
+              MAX(IF(book = 'Circa'     AND rn_close = 1, total_points, NULL)),
+              MAX(IF(book = 'Bookmaker' AND rn_close = 1, total_points, NULL)),
+              MAX(IF(book = 'Buckeye'   AND rn_close = 1, total_points, NULL))
+            ) AS closing_2h_total
+          FROM second_half_totals_ranked
+          GROUP BY eventId
+        ),
+        
+        -- ============================================================
+        -- SECOND HALF SPREADS (HOME POV)
+        -- ============================================================
+        second_half_spreads_ranked AS (
+          SELECT
+            eventId,
+            book,
+            points AS spread_points,
+            modifiedOn,
+            ROW_NUMBER() OVER (
+              PARTITION BY eventId, book
+              ORDER BY modifiedOn ASC
+            ) AS rn_open,
+            ROW_NUMBER() OVER (
+              PARTITION BY eventId, book
+              ORDER BY modifiedOn DESC
+            ) AS rn_close
+          FROM last_two_days_2h
+          WHERE betType = 2 AND market = 'spread' AND side = 'si1'
+        ),
+        
+        second_half_spreads AS (
+          SELECT
+            eventId,
+            -- Opening 2H Spread
+            COALESCE(
+              MAX(IF(book = 'Circa'     AND rn_open = 1, spread_points, NULL)),
+              MAX(IF(book = 'Bookmaker' AND rn_open = 1, spread_points, NULL)),
+              MAX(IF(book = 'Buckeye'   AND rn_open = 1, spread_points, NULL))
+            ) AS opening_2h_spread,
+            -- Closing 2H Spread
+            COALESCE(
+              MAX(IF(book = 'Circa'     AND rn_close = 1, spread_points, NULL)),
+              MAX(IF(book = 'Bookmaker' AND rn_close = 1, spread_points, NULL)),
+              MAX(IF(book = 'Buckeye'   AND rn_close = 1, spread_points, NULL))
+            ) AS closing_2h_spread
+          FROM second_half_spreads_ranked
+          GROUP BY eventId
+        ),
+        
+        -- ============================================================
         -- EVENT META (from Unabated only)
         -- ============================================================
         event_meta AS (
@@ -283,7 +370,12 @@ def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str, 
                )
               )
             ELSE NULL
-          END AS lookahead_2h_total
+          END AS lookahead_2h_total,
+        
+          sht.opening_2h_total,
+          sht.closing_2h_total,
+          shs.opening_2h_spread,
+          shs.closing_2h_spread
         
         FROM `meatloaf-427522.cbb_2025.xref_games` x
         LEFT JOIN event_meta m
@@ -294,6 +386,10 @@ def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str, 
           ON x.event_id = fht.eventId
         LEFT JOIN closing_home_spread sp
           ON x.event_id = sp.eventId
+        LEFT JOIN second_half_totals sht
+          ON x.event_id = sht.eventId
+        LEFT JOIN second_half_spreads shs
+          ON x.event_id = shs.eventId
         WHERE x.game_id IN ({game_ids_str})
         ORDER BY COALESCE(m.eventStart, TIMESTAMP('1900-01-01')) DESC
         """
@@ -302,7 +398,7 @@ def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str, 
         query_job = client.query(query)
         results = query_job.result()
         
-        # Build dictionary with (closing_total, board, rotation_number, closing_1h_total, lookahead_2h_total, closing_spread_home, home_team_name) tuples
+        # Build dictionary with (closing_total, board, rotation_number, closing_1h_total, lookahead_2h_total, closing_spread_home, home_team_name, opening_2h_total, closing_2h_total, opening_2h_spread, closing_2h_spread) tuples
         closing_totals = {}
         row_count = 0
         skipped_count = 0
@@ -326,7 +422,11 @@ def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str, 
                 lookahead_2h_total = float(row.lookahead_2h_total) if row.lookahead_2h_total is not None else None
                 closing_spread_home = float(row.closing_spread_home) if row.closing_spread_home is not None else None
                 home_team_name = str(row.homeTeamName) if row.homeTeamName else None
-                closing_totals[str(row.game_id)] = (closing_total, board, rotation_number, closing_1h_total, lookahead_2h_total, closing_spread_home, home_team_name)
+                opening_2h_total = float(row.opening_2h_total) if row.opening_2h_total is not None else None
+                closing_2h_total = float(row.closing_2h_total) if row.closing_2h_total is not None else None
+                opening_2h_spread = float(row.opening_2h_spread) if row.opening_2h_spread is not None else None
+                closing_2h_spread = float(row.closing_2h_spread) if row.closing_2h_spread is not None else None
+                closing_totals[str(row.game_id)] = (closing_total, board, rotation_number, closing_1h_total, lookahead_2h_total, closing_spread_home, home_team_name, opening_2h_total, closing_2h_total, opening_2h_spread, closing_2h_spread)
             except Exception as e:
                 print(f"ERROR processing row for game_id {row.game_id}: {e}")
                 skipped_count += 1
@@ -344,8 +444,8 @@ def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str, 
         return {}
 
 
-def get_closing_totals(game_ids: list) -> Dict[str, Tuple[float, str, Optional[int], Optional[float], Optional[float], Optional[float], Optional[str]]]:
-    """Get closing totals, board info, rotation numbers, first half totals, lookahead 2H totals, home spreads, and home team names for a list of game IDs from BigQuery.
+def get_closing_totals(game_ids: list) -> Dict[str, Tuple[float, str, Optional[int], Optional[float], Optional[float], Optional[float], Optional[str], Optional[float], Optional[float], Optional[float], Optional[float]]]:
+    """Get closing totals, board info, rotation numbers, first half totals, lookahead 2H totals, home spreads, home team names, and second half data for a list of game IDs from BigQuery.
     
     Only runs query once per hour (via cache) and skips between 10pm-8am.
     During off-hours, returns cached data if available, otherwise empty dict.
@@ -354,7 +454,7 @@ def get_closing_totals(game_ids: list) -> Dict[str, Tuple[float, str, Optional[i
         game_ids: List of game ID strings
         
     Returns:
-        Dictionary mapping game_id to (closing_total, board, rotation_number, closing_1h_total, lookahead_2h_total, closing_spread_home, home_team_name)
+        Dictionary mapping game_id to (closing_total, board, rotation_number, closing_1h_total, lookahead_2h_total, closing_spread_home, home_team_name, opening_2h_total, closing_2h_total, opening_2h_spread, closing_2h_spread)
     """
     # Check if we should run the query based on time
     if not should_run_query():

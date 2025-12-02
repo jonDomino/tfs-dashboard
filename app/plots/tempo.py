@@ -42,7 +42,11 @@ def build_tempo_figure(
     rotation_number: Optional[int] = None,
     lookahead_2h_total: Optional[float] = None,
     closing_spread_home: Optional[float] = None,
-    home_team_name: Optional[str] = None
+    home_team_name: Optional[str] = None,
+    opening_2h_total: Optional[float] = None,
+    closing_2h_total: Optional[float] = None,
+    opening_2h_spread: Optional[float] = None,
+    closing_2h_spread: Optional[float] = None
 ) -> plt.Figure:
     """Build tempo visualization figure.
     
@@ -59,6 +63,10 @@ def build_tempo_figure(
         lookahead_2h_total: Lookahead 2H total (optional)
         closing_spread_home: Closing spread from home team's perspective (optional)
         home_team_name: Home team name (optional)
+        opening_2h_total: Opening 2H total (optional)
+        closing_2h_total: Closing 2H total (optional)
+        opening_2h_spread: Opening 2H spread (optional)
+        closing_2h_spread: Closing 2H spread (optional)
         
     Returns:
         Matplotlib figure
@@ -759,49 +767,80 @@ def build_tempo_figure(
             transform=fig.transFigure  # Use figure coordinates
         )
     
-    # Add closing total, lookahead 2H total, and spread in top-right above plot
-    y_pos = 0.98  # Start position at top-right
-    line_height = 0.025  # Vertical spacing between lines
-    
+    # Create table in top-right above plot
     if closing_total is not None:
-        fig.text(
-            0.98, y_pos,
-            f"Total: {closing_total:.1f}",
-            fontsize=9,
-            color='#0a0a0a',
-            horizontalalignment='right',
-            verticalalignment='top',
-            transform=fig.transFigure
-        )
-        y_pos -= line_height
-    
-    if lookahead_2h_total is not None:
-        fig.text(
-            0.98, y_pos,
-            f"2H Looka: {lookahead_2h_total:.1f}",
-            fontsize=9,
-            color='#0a0a0a',
-            horizontalalignment='right',
-            verticalalignment='top',
-            transform=fig.transFigure
-        )
-        y_pos -= line_height
-    
-    if closing_spread_home is not None and home_team_name:
-        # Format spread: show as "-12" or "12" (no + sign for positive)
-        spread_str = f"{closing_spread_home:.1f}"
-        # Remove trailing .0 if it's a whole number
-        if spread_str.endswith('.0'):
-            spread_str = spread_str[:-2]
-        fig.text(
-            0.98, y_pos,
-            f"{home_team_name}: {spread_str}",
-            fontsize=9,
-            color='#0a0a0a',
-            horizontalalignment='right',
-            verticalalignment='top',
-            transform=fig.transFigure
-        )
+        # Prepare table data
+        table_data = []
+        table_cols = ['', '2H Open', '2H Close']
+        
+        # Row 1: Total
+        total_row = [f"Total: {closing_total:.1f}", '', '']
+        table_data.append(total_row)
+        
+        # Row 2: 2H Looka
+        if lookahead_2h_total is not None:
+            looka_row = [f"2H Looka: {lookahead_2h_total:.1f}", '', '']
+            if opening_2h_total is not None:
+                looka_row[1] = f"{opening_2h_total:.1f}"
+            if closing_2h_total is not None:
+                looka_row[2] = f"{closing_2h_total:.1f}"
+            table_data.append(looka_row)
+        
+        # Row 3: Home team spread
+        if closing_spread_home is not None and home_team_name:
+            spread_str = f"{closing_spread_home:.1f}"
+            # Remove trailing .0 if it's a whole number
+            if spread_str.endswith('.0'):
+                spread_str = spread_str[:-2]
+            spread_row = [f"{home_team_name}: {spread_str}", '', '']
+            if opening_2h_spread is not None:
+                spread_val = f"{opening_2h_spread:.1f}"
+                if spread_val.endswith('.0'):
+                    spread_val = spread_val[:-2]
+                spread_row[1] = spread_val
+            if closing_2h_spread is not None:
+                spread_val = f"{closing_2h_spread:.1f}"
+                if spread_val.endswith('.0'):
+                    spread_val = spread_val[:-2]
+                spread_row[2] = spread_val
+            table_data.append(spread_row)
+        
+        # Create table using matplotlib
+        if table_data:
+            # Position table in top-right
+            table_ax = fig.add_axes([0.70, 0.92, 0.28, 0.08])  # [left, bottom, width, height] in figure coordinates
+            table_ax.axis('off')
+            
+            # Create table
+            table = table_ax.table(
+                cellText=table_data,
+                colLabels=table_cols,
+                cellLoc='left',
+                loc='upper right',
+                bbox=[0, 0, 1, 1]
+            )
+            
+            # Style the table
+            table.auto_set_font_size(False)
+            table.set_fontsize(8)
+            table.scale(1, 1.5)
+            
+            # Style header row
+            for i in range(len(table_cols)):
+                cell = table[(0, i)]
+                cell.set_facecolor('#f0f0f0')
+                cell.set_text_props(weight='bold', fontsize=8)
+            
+            # Style data cells - left align first column, right align others
+            for i, row in enumerate(table_data):
+                for j in range(len(table_cols)):
+                    cell = table[(i + 1, j)]
+                    if j == 0:
+                        cell.set_text_props(ha='left')
+                    else:
+                        cell.set_text_props(ha='right')
+                    cell.set_edgecolor('#d0d0d0')
+                    cell.set_linewidth(0.5)
     
     fig.tight_layout()
     return fig
