@@ -238,7 +238,7 @@ def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str, 
           FROM last_two_days_pg
           WHERE book = 'Unabated'
           GROUP BY 1,2,3,4,5,6
-        ),
+        )
         
         -- ============================================================
         -- FINAL OUTPUT
