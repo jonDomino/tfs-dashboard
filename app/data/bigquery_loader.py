@@ -304,8 +304,20 @@ def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str, 
         
         # Build dictionary with (closing_total, board, rotation_number, closing_1h_total, lookahead_2h_total, closing_spread_home, home_team_name) tuples
         closing_totals = {}
+        row_count = 0
+        skipped_count = 0
         for row in results:
-            if row.game_id and row.closing_total is not None:
+            row_count += 1
+            if not row.game_id:
+                skipped_count += 1
+                continue
+            if row.closing_total is None:
+                # Log but don't skip - we want to include games even without closing totals
+                # They just won't have market data
+                skipped_count += 1
+                continue
+            
+            try:
                 # Ensure closing_total is a float
                 closing_total = float(row.closing_total)
                 board = str(row.board) if row.board else 'main'
@@ -315,7 +327,12 @@ def _get_closing_totals_internal(game_ids: list) -> Dict[str, Tuple[float, str, 
                 closing_spread_home = float(row.closing_spread_home) if row.closing_spread_home is not None else None
                 home_team_name = str(row.homeTeamName) if row.homeTeamName else None
                 closing_totals[str(row.game_id)] = (closing_total, board, rotation_number, closing_1h_total, lookahead_2h_total, closing_spread_home, home_team_name)
+            except Exception as e:
+                print(f"ERROR processing row for game_id {row.game_id}: {e}")
+                skipped_count += 1
+                continue
         
+        print(f"BigQuery results: {row_count} rows processed, {len(closing_totals)} added to dict, {skipped_count} skipped")
         return closing_totals
         
     except Exception as e:

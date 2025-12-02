@@ -441,6 +441,7 @@ def _render_content():
     if game_ids:
         try:
             closing_totals_raw = get_closing_totals(game_ids)
+            print(f"DEBUG: get_closing_totals returned {len(closing_totals_raw)} games for {len(game_ids)} requested")
         except Exception as e:
             # Fail gracefully if BigQuery fails
             import traceback
@@ -457,20 +458,27 @@ def _render_content():
     if closing_totals_raw:
         for gid in game_ids:
             if gid in closing_totals_raw:
-                closing_total, board, rotation_number, closing_1h_total, lookahead_2h_total, spread_home, home_team_name = closing_totals_raw[gid]
-                # Ensure closing_total is a float
-                closing_total = float(closing_total)
-                # Only include if board matches filter
-                if board in selected_boards:
-                    closing_totals[gid] = closing_total
-                    if rotation_number is not None:
-                        rotation_numbers[gid] = rotation_number
-                    if lookahead_2h_total is not None:
-                        lookahead_2h_totals[gid] = float(lookahead_2h_total)
-                    if spread_home is not None:
-                        closing_spread_home[gid] = float(spread_home)
-                    if home_team_name:
-                        home_team_names[gid] = home_team_name
+                try:
+                    closing_total, board, rotation_number, closing_1h_total, lookahead_2h_total, spread_home, home_team_name = closing_totals_raw[gid]
+                    # Ensure closing_total is a float
+                    closing_total = float(closing_total)
+                    # Only include if board matches filter
+                    if board in selected_boards:
+                        closing_totals[gid] = closing_total
+                        if rotation_number is not None:
+                            rotation_numbers[gid] = rotation_number
+                        if lookahead_2h_total is not None:
+                            lookahead_2h_totals[gid] = float(lookahead_2h_total)
+                        if spread_home is not None:
+                            closing_spread_home[gid] = float(spread_home)
+                        if home_team_name:
+                            home_team_names[gid] = home_team_name
+                except Exception as e:
+                    print(f"ERROR unpacking data for game {gid}: {e}")
+                    import traceback
+                    print(traceback.format_exc())
+    
+    print(f"DEBUG: After filtering - closing_totals: {len(closing_totals)}, selected_boards: {selected_boards}")
     
     # Group games by status
     games_by_status: Dict[str, List[str]] = {
