@@ -2,7 +2,8 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
+from scipy import stats
 from app.tfs.change_points import find_change_points
 from app.tfs.segments import get_segment_lines
 from app.util.kernel import gaussian_kernel_smoother
@@ -241,37 +242,76 @@ def build_tempo_figure(
                     pct_above_by_type[poss_type] = (above_count / total_count * 100) if total_count > 0 else 0.0
                     count_by_type[poss_type] = total_count
             
+            # Calculate p-values
+            # Overall p-values
+            p_value_p1 = calculate_combined_p_value(residuals_by_type_p1, period=1) if residuals_p1 else 0.5
+            p_value_p2 = calculate_combined_p_value(residuals_by_type_p2, period=2) if residuals_p2 else 0.5
+            p_value_gm = calculate_combined_p_value(
+                {k: residuals_by_type_p1.get(k, []) + residuals_by_type_p2.get(k, []) 
+                 for k in ["rebound", "turnover", "oppo_made_shot", "oppo_made_ft", "other"]},
+                period=1  # Use period 1 std devs as default for combined
+            ) if residuals else 0.5
+            
+            # P-values by type for Period 1
+            p_value_by_type_p1 = {}
+            for poss_type, res_list in residuals_by_type_p1.items():
+                if res_list:
+                    std_dev = get_std_dev(1, poss_type)
+                    p_value_by_type_p1[poss_type] = calculate_p_value(np.mean(res_list), len(res_list), std_dev)
+            
+            # P-values by type for Period 2
+            p_value_by_type_p2 = {}
+            for poss_type, res_list in residuals_by_type_p2.items():
+                if res_list:
+                    std_dev = get_std_dev(2, poss_type)
+                    p_value_by_type_p2[poss_type] = calculate_p_value(np.mean(res_list), len(res_list), std_dev)
+            
+            # P-values by type overall (game)
+            p_value_by_type = {}
+            for poss_type in ["rebound", "turnover", "oppo_made_shot", "oppo_made_ft", "other"]:
+                all_res = residuals_by_type_p1.get(poss_type, []) + residuals_by_type_p2.get(poss_type, [])
+                if all_res:
+                    # Use period 1 std dev as default for combined
+                    std_dev = get_std_dev(1, poss_type)
+                    p_value_by_type[poss_type] = calculate_p_value(np.mean(all_res), len(all_res), std_dev)
+            
             residual_data = {
                 # Overall (Game)
                 "avg_residual": avg_residual,
                 "median_residual": median_residual,
                 "pct_above": pct_above,
                 "total_poss": total_poss,
+                "p_value": p_value_gm,
                 # Period 1
                 "avg_residual_p1": avg_residual_p1,
                 "median_residual_p1": median_residual_p1,
                 "pct_above_p1": pct_above_p1,
                 "total_poss_p1": total_poss_p1,
+                "p_value_p1": p_value_p1,
                 # Period 2
                 "avg_residual_p2": avg_residual_p2,
                 "median_residual_p2": median_residual_p2,
                 "pct_above_p2": pct_above_p2,
                 "total_poss_p2": total_poss_p2,
+                "p_value_p2": p_value_p2,
                 # By type (overall)
                 "avg_by_type": avg_by_type,
                 "median_by_type": median_by_type,
                 "pct_above_by_type": pct_above_by_type,
                 "count_by_type": count_by_type,
+                "p_value_by_type": p_value_by_type,
                 # By type Period 1
                 "avg_by_type_p1": avg_by_type_p1,
                 "median_by_type_p1": median_by_type_p1,
                 "pct_above_by_type_p1": pct_above_by_type_p1,
                 "count_by_type_p1": count_by_type_p1,
+                "p_value_by_type_p1": p_value_by_type_p1,
                 # By type Period 2
                 "avg_by_type_p2": avg_by_type_p2,
                 "median_by_type_p2": median_by_type_p2,
                 "pct_above_by_type_p2": pct_above_by_type_p2,
                 "count_by_type_p2": count_by_type_p2,
+                "p_value_by_type_p2": p_value_by_type_p2,
             }
         except Exception as e:
             # If calculation fails, skip residual chart
@@ -634,21 +674,24 @@ def build_tempo_figure(
                 return default
             return val
         
-        # Overall row - reordered: Metric, P1 (Cnt, Mean, Med, Slow%), P2 (Cnt, Mean, Med, Slow%), Gm (Cnt, Mean, Med, Slow%)
+        # Overall row - reordered: Metric, P1 (Cnt, Mean, Med, Slow%, P-val), P2 (Cnt, Mean, Med, Slow%, P-val), Gm (Cnt, Mean, Med, Slow%, P-val)
         table_data.append([
             "Overall",
             str(residual_data.get('total_poss_p1', 0)),
             f"{residual_data.get('avg_residual_p1', 0):+.1f}s" if residual_data.get('total_poss_p1', 0) > 0 else "-",
             f"{residual_data.get('median_residual_p1', 0):+.1f}s" if residual_data.get('total_poss_p1', 0) > 0 else "-",
             f"{residual_data.get('pct_above_p1', 0):.1f}%" if residual_data.get('total_poss_p1', 0) > 0 else "-",
+            f"{residual_data.get('p_value_p1', 0.5)*100:.1f}%" if residual_data.get('total_poss_p1', 0) > 0 else "-",
             str(residual_data.get('total_poss_p2', 0)),
             f"{residual_data.get('avg_residual_p2', 0):+.1f}s" if residual_data.get('total_poss_p2', 0) > 0 else "-",
             f"{residual_data.get('median_residual_p2', 0):+.1f}s" if residual_data.get('total_poss_p2', 0) > 0 else "-",
             f"{residual_data.get('pct_above_p2', 0):.1f}%" if residual_data.get('total_poss_p2', 0) > 0 else "-",
+            f"{residual_data.get('p_value_p2', 0.5)*100:.1f}%" if residual_data.get('total_poss_p2', 0) > 0 else "-",
             str(residual_data.get('total_poss', 0)),
             f"{residual_data.get('avg_residual', 0):+.1f}s",
             f"{residual_data.get('median_residual', 0):+.1f}s",
-            f"{residual_data.get('pct_above', 0):.1f}%"
+            f"{residual_data.get('pct_above', 0):.1f}%",
+            f"{residual_data.get('p_value', 0.5)*100:.1f}%"
         ])
         
         # Add possession type rows (Made Shot, Made FT, Rebound, Turnover)
@@ -670,20 +713,27 @@ def build_tempo_figure(
                 pct_p2 = residual_data['pct_above_by_type_p2'].get(poss_type, 0.0) if count_p2 > 0 else None
                 pct_gm = residual_data['pct_above_by_type'].get(poss_type, 0.0)
                 
+                p_val_p1 = residual_data.get('p_value_by_type_p1', {}).get(poss_type, 0.5) if count_p1 > 0 else None
+                p_val_p2 = residual_data.get('p_value_by_type_p2', {}).get(poss_type, 0.5) if count_p2 > 0 else None
+                p_val_gm = residual_data.get('p_value_by_type', {}).get(poss_type, 0.5)
+                
                 table_data.append([
                     type_labels_display[poss_type],
                     str(count_p1),
                     f"{avg_p1:+.1f}s" if avg_p1 is not None else "-",
                     f"{median_p1:+.1f}s" if median_p1 is not None else "-",
                     f"{pct_p1:.1f}%" if pct_p1 is not None else "-",
+                    f"{p_val_p1*100:.1f}%" if p_val_p1 is not None else "-",
                     str(count_p2),
                     f"{avg_p2:+.1f}s" if avg_p2 is not None else "-",
                     f"{median_p2:+.1f}s" if median_p2 is not None else "-",
                     f"{pct_p2:.1f}%" if pct_p2 is not None else "-",
+                    f"{p_val_p2*100:.1f}%" if p_val_p2 is not None else "-",
                     str(count_gm),
                     f"{avg_gm:+.1f}s",
                     f"{median_gm:+.1f}s",
-                    f"{pct_gm:.1f}%"
+                    f"{pct_gm:.1f}%",
+                    f"{p_val_gm*100:.1f}%"
                 ])
         
         # Create table with 13 columns - ordered: Metric, then all P1, then all P2, then all Gm
