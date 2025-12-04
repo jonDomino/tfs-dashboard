@@ -2,11 +2,146 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 from app.tfs.change_points import find_change_points
 from app.tfs.segments import get_segment_lines
 from app.util.kernel import gaussian_kernel_smoother
 from app.util.style import get_plot_style, get_color, get_poss_start_color
+
+# Try to import scipy.stats, fallback to simple approximation if not available
+try:
+    from scipy import stats
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
+    # Simple approximation of normal CDF using error function
+    import math
+    def norm_cdf_approx(z):
+        """Approximate normal CDF using error function."""
+        return 0.5 * (1 + math.erf(z / math.sqrt(2)))
+
+
+# Standard deviations by period and possession start type (estimated - should be updated with actual values)
+# Format: {period: {poss_start_type: std_dev}}
+STD_DEVS = {
+    1: {  # Period 1
+        "rebound": 8.5,
+        "turnover": 8.5,
+        "oppo_made_shot": 10.0,
+        "oppo_made_ft": 9.0,
+    },
+    2: {  # Period 2
+        "rebound": 8.5,
+        "turnover": 8.5,
+        "oppo_made_shot": 10.0,
+        "oppo_made_ft": 9.0,
+    }
+}
+
+
+def calculate_p_value(mean_residual: float, n: int, std_dev: float) -> float:
+    """Calculate p-value for mean residual.
+    
+    Args:
+        mean_residual: Mean residual (observed - expected)
+        n: Sample size
+        std_dev: Population standard deviation
+        
+    Returns:
+        p-value (0-1): Probability of observing this mean or more extreme by chance
+        - For slow games (positive residual): p-value = P(Z > z) = probability of being this slow or slower
+        - For fast games (negative residual): p-value = P(Z < z) = probability of being this fast or faster
+    """
+    if n == 0 or std_dev == 0:
+        return 0.5  # Default to 50% if no data
+    
+    # Standard error of the mean
+    se = std_dev / np.sqrt(n)
+    
+    # z-score (expected mean is 0)
+    z = mean_residual / se
+    
+    # One-tailed p-value
+    if HAS_SCIPY:
+        if mean_residual > 0:
+            # Slow game: probability of being this slow or slower
+            p_value = 1 - stats.norm.cdf(z)
+        else:
+            # Fast game: probability of being this fast or faster
+            p_value = stats.norm.cdf(z)
+    else:
+        # Use approximation if scipy not available
+        if mean_residual > 0:
+            p_value = 1 - norm_cdf_approx(z)
+        else:
+            p_value = norm_cdf_approx(z)
+    
+    return p_value
+
+
+def get_std_dev(period: int, poss_start_type: Optional[str], std_devs: Optional[Dict] = None) -> float:
+    """Get standard deviation for given period and possession start type.
+    
+    Args:
+        period: Period number (1 or 2)
+        poss_start_type: Possession start type
+        std_devs: Optional dictionary of std devs (defaults to STD_DEVS)
+        
+    Returns:
+        Standard deviation
+    """
+    if std_devs is None:
+        std_devs = STD_DEVS
+    
+    period_key = 1 if period == 1 else 2
+    poss_type = str(poss_start_type).lower() if poss_start_type else "rebound"
+    
+    # Default to rebound if type not found
+    return std_devs.get(period_key, {}).get(poss_type, std_devs.get(period_key, {}).get("rebound", 8.5))
+
+
+def calculate_combined_p_value(residuals_by_type: Dict[str, list], period: int, std_devs: Optional[Dict] = None) -> float:
+    """Calculate combined p-value for overall game considering all possession types.
+    
+    Args:
+        residuals_by_type: Dictionary mapping poss_start_type to list of residuals
+        period: Period number (1 or 2)
+        std_devs: Optional dictionary of std devs
+        
+    Returns:
+        Combined p-value
+    """
+    if std_devs is None:
+        std_devs = STD_DEVS
+    
+    # Calculate weighted mean and combined variance
+    total_residual = 0
+    total_n = 0
+    combined_variance = 0
+    
+    for poss_type, res_list in residuals_by_type.items():
+        if not res_list:
+            continue
+        
+        n = len(res_list)
+        mean_res = np.mean(res_list)
+        std_dev = get_std_dev(period, poss_type, std_devs)
+        
+        total_residual += mean_res * n
+        total_n += n
+        combined_variance += (std_dev ** 2) * n
+    
+    if total_n == 0:
+        return 0.5
+    
+    # Weighted mean
+    overall_mean = total_residual / total_n
+    
+    # Combined standard error (weighted average of variances)
+    combined_std = np.sqrt(combined_variance / total_n)
+    
+    # Calculate p-value
+    return calculate_p_value(overall_mean, total_n, combined_std)
 
 
 def get_team_names(df: pd.DataFrame) -> Tuple[Optional[str], Optional[str]]:
@@ -241,37 +376,76 @@ def build_tempo_figure(
                     pct_above_by_type[poss_type] = (above_count / total_count * 100) if total_count > 0 else 0.0
                     count_by_type[poss_type] = total_count
             
+            # Calculate p-values
+            # Overall p-values
+            p_value_p1 = calculate_combined_p_value(residuals_by_type_p1, period=1) if residuals_p1 else 0.5
+            p_value_p2 = calculate_combined_p_value(residuals_by_type_p2, period=2) if residuals_p2 else 0.5
+            p_value_gm = calculate_combined_p_value(
+                {k: residuals_by_type_p1.get(k, []) + residuals_by_type_p2.get(k, []) 
+                 for k in ["rebound", "turnover", "oppo_made_shot", "oppo_made_ft", "other"]},
+                period=1  # Use period 1 std devs as default for combined
+            ) if residuals else 0.5
+            
+            # P-values by type for Period 1
+            p_value_by_type_p1 = {}
+            for poss_type, res_list in residuals_by_type_p1.items():
+                if res_list:
+                    std_dev = get_std_dev(1, poss_type)
+                    p_value_by_type_p1[poss_type] = calculate_p_value(np.mean(res_list), len(res_list), std_dev)
+            
+            # P-values by type for Period 2
+            p_value_by_type_p2 = {}
+            for poss_type, res_list in residuals_by_type_p2.items():
+                if res_list:
+                    std_dev = get_std_dev(2, poss_type)
+                    p_value_by_type_p2[poss_type] = calculate_p_value(np.mean(res_list), len(res_list), std_dev)
+            
+            # P-values by type overall (game)
+            p_value_by_type = {}
+            for poss_type in ["rebound", "turnover", "oppo_made_shot", "oppo_made_ft", "other"]:
+                all_res = residuals_by_type_p1.get(poss_type, []) + residuals_by_type_p2.get(poss_type, [])
+                if all_res:
+                    # Use period 1 std dev as default for combined
+                    std_dev = get_std_dev(1, poss_type)
+                    p_value_by_type[poss_type] = calculate_p_value(np.mean(all_res), len(all_res), std_dev)
+            
             residual_data = {
                 # Overall (Game)
                 "avg_residual": avg_residual,
                 "median_residual": median_residual,
                 "pct_above": pct_above,
                 "total_poss": total_poss,
+                "p_value": p_value_gm,
                 # Period 1
                 "avg_residual_p1": avg_residual_p1,
                 "median_residual_p1": median_residual_p1,
                 "pct_above_p1": pct_above_p1,
                 "total_poss_p1": total_poss_p1,
+                "p_value_p1": p_value_p1,
                 # Period 2
                 "avg_residual_p2": avg_residual_p2,
                 "median_residual_p2": median_residual_p2,
                 "pct_above_p2": pct_above_p2,
                 "total_poss_p2": total_poss_p2,
+                "p_value_p2": p_value_p2,
                 # By type (overall)
                 "avg_by_type": avg_by_type,
                 "median_by_type": median_by_type,
                 "pct_above_by_type": pct_above_by_type,
                 "count_by_type": count_by_type,
+                "p_value_by_type": p_value_by_type,
                 # By type Period 1
                 "avg_by_type_p1": avg_by_type_p1,
                 "median_by_type_p1": median_by_type_p1,
                 "pct_above_by_type_p1": pct_above_by_type_p1,
                 "count_by_type_p1": count_by_type_p1,
+                "p_value_by_type_p1": p_value_by_type_p1,
                 # By type Period 2
                 "avg_by_type_p2": avg_by_type_p2,
                 "median_by_type_p2": median_by_type_p2,
                 "pct_above_by_type_p2": pct_above_by_type_p2,
                 "count_by_type_p2": count_by_type_p2,
+                "p_value_by_type_p2": p_value_by_type_p2,
             }
         except Exception as e:
             # If calculation fails, skip residual chart
@@ -634,21 +808,24 @@ def build_tempo_figure(
                 return default
             return val
         
-        # Overall row - reordered: Metric, P1 (Cnt, Mean, Med, Slow%), P2 (Cnt, Mean, Med, Slow%), Gm (Cnt, Mean, Med, Slow%)
+        # Overall row - reordered: Metric, P1 (Cnt, Mean, Med, Slow%, P-val), P2 (Cnt, Mean, Med, Slow%, P-val), Gm (Cnt, Mean, Med, Slow%, P-val)
         table_data.append([
             "Overall",
             str(residual_data.get('total_poss_p1', 0)),
             f"{residual_data.get('avg_residual_p1', 0):+.1f}s" if residual_data.get('total_poss_p1', 0) > 0 else "-",
             f"{residual_data.get('median_residual_p1', 0):+.1f}s" if residual_data.get('total_poss_p1', 0) > 0 else "-",
             f"{residual_data.get('pct_above_p1', 0):.1f}%" if residual_data.get('total_poss_p1', 0) > 0 else "-",
+            f"{residual_data.get('p_value_p1', 0.5)*100:.1f}%" if residual_data.get('total_poss_p1', 0) > 0 else "-",
             str(residual_data.get('total_poss_p2', 0)),
             f"{residual_data.get('avg_residual_p2', 0):+.1f}s" if residual_data.get('total_poss_p2', 0) > 0 else "-",
             f"{residual_data.get('median_residual_p2', 0):+.1f}s" if residual_data.get('total_poss_p2', 0) > 0 else "-",
             f"{residual_data.get('pct_above_p2', 0):.1f}%" if residual_data.get('total_poss_p2', 0) > 0 else "-",
+            f"{residual_data.get('p_value_p2', 0.5)*100:.1f}%" if residual_data.get('total_poss_p2', 0) > 0 else "-",
             str(residual_data.get('total_poss', 0)),
             f"{residual_data.get('avg_residual', 0):+.1f}s",
             f"{residual_data.get('median_residual', 0):+.1f}s",
-            f"{residual_data.get('pct_above', 0):.1f}%"
+            f"{residual_data.get('pct_above', 0):.1f}%",
+            f"{residual_data.get('p_value', 0.5)*100:.1f}%"
         ])
         
         # Add possession type rows (Made Shot, Made FT, Rebound, Turnover)
@@ -670,26 +847,33 @@ def build_tempo_figure(
                 pct_p2 = residual_data['pct_above_by_type_p2'].get(poss_type, 0.0) if count_p2 > 0 else None
                 pct_gm = residual_data['pct_above_by_type'].get(poss_type, 0.0)
                 
+                p_val_p1 = residual_data.get('p_value_by_type_p1', {}).get(poss_type, 0.5) if count_p1 > 0 else None
+                p_val_p2 = residual_data.get('p_value_by_type_p2', {}).get(poss_type, 0.5) if count_p2 > 0 else None
+                p_val_gm = residual_data.get('p_value_by_type', {}).get(poss_type, 0.5)
+                
                 table_data.append([
                     type_labels_display[poss_type],
                     str(count_p1),
                     f"{avg_p1:+.1f}s" if avg_p1 is not None else "-",
                     f"{median_p1:+.1f}s" if median_p1 is not None else "-",
                     f"{pct_p1:.1f}%" if pct_p1 is not None else "-",
+                    f"{p_val_p1*100:.1f}%" if p_val_p1 is not None else "-",
                     str(count_p2),
                     f"{avg_p2:+.1f}s" if avg_p2 is not None else "-",
                     f"{median_p2:+.1f}s" if median_p2 is not None else "-",
                     f"{pct_p2:.1f}%" if pct_p2 is not None else "-",
+                    f"{p_val_p2*100:.1f}%" if p_val_p2 is not None else "-",
                     str(count_gm),
                     f"{avg_gm:+.1f}s",
                     f"{median_gm:+.1f}s",
-                    f"{pct_gm:.1f}%"
+                    f"{pct_gm:.1f}%",
+                    f"{p_val_gm*100:.1f}%"
                 ])
         
-        # Create table with 13 columns - ordered: Metric, then all P1, then all P2, then all Gm
-        col_labels = ["Metric", "P1 Cnt", "P1 Mean", "P1 Med", "P1 Slow%", 
-                     "P2 Cnt", "P2 Mean", "P2 Med", "P2 Slow%",
-                     "Gm Cnt", "Gm Mean", "Gm Med", "Gm Slow%"]
+        # Create table with 16 columns - ordered: Metric, then all P1, then all P2, then all Gm
+        col_labels = ["Metric", "P1 Cnt", "P1 Mean", "P1 Med", "P1 Slow%", "P1 P-val",
+                     "P2 Cnt", "P2 Mean", "P2 Med", "P2 Slow%", "P2 P-val",
+                     "Gm Cnt", "Gm Mean", "Gm Med", "Gm Slow%", "Gm P-val"]
         table = ax_residual.table(
             cellText=table_data,
             colLabels=col_labels,
