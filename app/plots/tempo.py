@@ -736,10 +736,10 @@ def build_tempo_figure(
                     f"{p_val_gm*100:.1f}%"
                 ])
         
-        # Create table with 13 columns - ordered: Metric, then all P1, then all P2, then all Gm
-        col_labels = ["Metric", "P1 Cnt", "P1 Mean", "P1 Med", "P1 Slow%", 
-                     "P2 Cnt", "P2 Mean", "P2 Med", "P2 Slow%",
-                     "Gm Cnt", "Gm Mean", "Gm Med", "Gm Slow%"]
+        # Create table with 16 columns - ordered: Metric, then all P1, then all P2, then all Gm
+        col_labels = ["Metric", "P1 Cnt", "P1 Mean", "P1 Med", "P1 Slow%", "P1 P-val",
+                     "P2 Cnt", "P2 Mean", "P2 Med", "P2 Slow%", "P2 P-val",
+                     "Gm Cnt", "Gm Mean", "Gm Med", "Gm Slow%", "Gm P-val"]
         table = ax_residual.table(
             cellText=table_data,
             colLabels=col_labels,
